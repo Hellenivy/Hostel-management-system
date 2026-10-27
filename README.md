@@ -61,3 +61,38 @@ The Python packages required by the project are listed in `requirements.txt`.
 - Database credentials and M-Pesa credentials must be configured on each computer.
 - M-Pesa integration is intended for sandbox testing.
 - The system is a student project developed using Django and MariaDB.
+## M-Pesa Daraja Sandbox Setup
+
+The system includes an M-Pesa STK Push integration using the Safaricom Daraja sandbox. To test this feature, configure your own sandbox credentials.
+
+### 1. Create a Daraja Account
+Register or sign in to the Safaricom Daraja developer portal and create or access a sandbox application for Lipa Na M-Pesa Online (STK Push).
+
+### 2. Configure Environment Variables
+Create a `.env` file in the Django project directory where `manage.py` is located. Add your own configuration values:
+
+```env
+MPESA_CONSUMER_KEY=your_consumer_key
+MPESA_CONSUMER_SECRET=your_consumer_secret
+MPESA_PASSKEY=your_passkey
+```
+
+Do not commit or share the `.env` file. Keep credentials private.
+
+### 3. Configure the Callback URL
+Install ngrok and start the Django development server on port 8000. In a separate terminal, start a tunnel:
+
+```cmd
+ngrok http 8000
+```
+
+Copy the HTTPS forwarding URL provided by ngrok. Update `ALLOWED_HOSTS` and `MPESA_CALLBACK_URL` in Django settings to use that URL. The callback path is:
+
+`/mpesa/callback/`
+
+The callback URL must be publicly reachable for Daraja to send payment results to the local application.
+
+### 4. Test STK Push
+Use the Daraja sandbox test environment and its supported test details to initiate an STK Push. Check the application for the transaction status and callback result.
+
+**Note:** The sandbox is for testing, not real rent collection. Each developer should configure their own credentials and callback URL.
