@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+        <h1>Room Occupancy Dashboard</h1>
+
+     <p><a href="{% url 'payments' %}">View Payments</a></p>
+      <p><a href="{% url 'add_room' %}">Add Room</a></p>
+      <p><a href="{% url 'add_tenant' %}">Add Tenant</a></p>
+      <p><a href="{% url 'balances' %}">View Rent Balances</a></p>
+      <p><a href="{% url 'complaints' %}">Complaints</a></p>
+
+        <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit">Logout</button>
+    </form>
+
+      <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
+        h1 { color: #2c3e50; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #2c3e50; color: white; }
+        .Vacant { color: green; font-weight: bold; }
+        .Full { color: red; font-weight: bold; }
+        .Partly { color: orange; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <th>Room</th>
+            <th>Rent (KES)</th>
+            <th>Capacity</th>
+            <th>Occupants</th>
+            <th>Tenants</th>
+            <th>Status</th>
+        </tr>
+
+        {% for item in room_list %}
+        <tr>
+            <td>{{ item.room.room_number }}</td>
+            <td>{{ item.room.rent_amount }}</td>
+            <td>{{ item.room.capacity }}</td>
+            <td>{{ item.count }}</td>
+            <td>
+                {% for tenant in item.tenants %}
+                    {{ tenant.full_name }}<br>
+                {% empty %}
+                    -
+                {% endfor %}
+            </td>
+            <td>
+                {% if item.status == "Vacant" %}
+                    <span class="Vacant">Vacant</span>
+                {% elif item.status == "Full" %}
+                    <span class="Full">Full</span>
+                {% else %}
+                    <span class="Partly">Partly occupied</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

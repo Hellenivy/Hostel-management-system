@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payments</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
+        h1 { color: #2c3e50; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #2c3e50; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Rent Payments</h1>
+    <p><a href="{% url 'dashboard' %}">Back to Dashboard</a></p>
+        <p><a href="{% url 'add_payment' %}">Record Payment</a></p>
+    <table>
+        <tr>
+            <th>Tenant</th>
+            <th>Room</th>
+            <th>Amount (KES)</th>
+            <th>M-Pesa Code</th>
+            <th>Date Paid</th>
+        </tr>
+
+        {% for p in payments %}
+        <tr>
+            <td>{{ p.tenant.full_name }}</td>
+            <td>{{ p.tenant.room.room_number }}</td>
+            <td>{{ p.amount }}</td>
+            <td>{{ p.mpesa_code }}</td>
+            <td>{{ p.date_paid }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5">No payments yet.</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
