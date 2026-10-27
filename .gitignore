@@ -1,0 +1,18 @@
+# Python virtual environments
+venv/
+.venv/
+**/venv/
+**/.venv/
+
+# Environment files and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Python temporary files
+__pycache__/
+*.py[cod]
+
+# Local databases
+*.sqlite3
