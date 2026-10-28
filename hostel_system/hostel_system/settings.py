@@ -21,7 +21,10 @@ load_dotenv(BASE_DIR / 'hostel_system' / '.env')
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-z7tj52m5ex$(qh2t39m+2zo9413#7b#d^$#6!w+ixu*#=m)lbm'
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError("DJANGO_SECRET_KEY is not set. Copy .env.example to .env and fill it in.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -80,12 +83,8 @@ WSGI_APPLICATION = 'hostel_system.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'smart_hostel_db',
-        'USER': 'root',
-        'PASSWORD': '',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -148,3 +147,16 @@ MPESA_CALLBACK_URL = "https://estimate-gopher-dedicator.ngrok-free.dev/mpesa/cal
 MPESA_CONSUMER_KEY = os.getenv("MPESA_CONSUMER_KEY", "")
 MPESA_CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET", "")
 MPESA_PASSKEY = os.getenv("MPESA_PASSKEY","")
+
+# Secret appended to MPESA_CALLBACK_URL; callbacks without it are rejected.
+MPESA_CALLBACK_TOKEN = os.getenv("MPESA_CALLBACK_TOKEN", "")
+
+# Africa's Talking SMS. Use AT_USERNAME=sandbox while testing.
+AT_USERNAME = os.getenv("AT_USERNAME", "sandbox")
+AT_API_KEY = os.getenv("AT_API_KEY", "")
+AT_SENDER_ID = os.getenv("AT_SENDER_ID", "")
+
+# Rent reminders: rent is due on this day of each month (1-28), and a
+# reminder also goes out this many days before.
+RENT_DUE_DAY = 1
+RENT_REMINDER_DAYS_BEFORE = 3

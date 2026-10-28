@@ -1,41 +1,64 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Payments</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
-        h1 { color: #2c3e50; }
-        table { width: 100%; border-collapse: collapse; background: white; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        th { background: #2c3e50; color: white; }
-    </style>
-</head>
-<body>
-    <h1>Rent Payments</h1>
-    <p><a href="{% url 'dashboard' %}">Back to Dashboard</a></p>
-        <p><a href="{% url 'add_payment' %}">Record Payment</a></p>
-    <table>
-        <tr>
-            <th>Tenant</th>
-            <th>Room</th>
-            <th>Amount (KES)</th>
-            <th>M-Pesa Code</th>
-            <th>Date Paid</th>
-        </tr>
+{% extends "hostel/base.html" %}
 
-        {% for p in payments %}
-        <tr>
-            <td>{{ p.tenant.full_name }}</td>
-            <td>{{ p.tenant.room.room_number }}</td>
-            <td>{{ p.amount }}</td>
-            <td>{{ p.mpesa_code }}</td>
-            <td>{{ p.date_paid }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="5">No payments yet.</td>
-        </tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
+{% block title %}Payments{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Payments</h1>
+            <p class="page-subtitle">Every rent payment received, newest first.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'add_payment' %}" class="btn">
+                <svg class="icon"><use href="#i-plus"/></svg> Record payment
+            </a>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        {% if payments %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tenant</th>
+                        <th>Room</th>
+                        <th class="num">Amount (KES)</th>
+                        <th>M-Pesa code</th>
+                        <th>Date paid</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payments %}
+                    <tr>
+                        <td>
+                            <div class="person">
+                                <span class="avatar">{{ p.tenant.full_name|slice:":1"|upper }}</span>
+                                <span class="person-name">{{ p.tenant.full_name }}</span>
+                            </div>
+                        </td>
+                        <td>{{ p.tenant.room.room_number|default:"—" }}</td>
+                        <td class="num strong">{{ p.amount|floatformat:"2g" }}</td>
+                        <td>
+                            {% if p.mpesa_code %}
+                                <span class="code">{{ p.mpesa_code }}</span>
+                            {% else %}
+                                <span class="subtle">Cash / manual</span>
+                            {% endif %}
+                        </td>
+                        <td class="muted">{{ p.date_paid|date:"d M Y, H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <svg class="icon"><use href="#i-receipt"/></svg>
+                <h3>No payments yet</h3>
+                <p>Payments recorded manually or received via M-Pesa show up here.</p>
+                <a href="{% url 'add_payment' %}" class="btn"><svg class="icon"><use href="#i-plus"/></svg> Record payment</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

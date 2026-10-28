@@ -1,22 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Add Room</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
-        h1 { color: #2c3e50; }
-        form { background: white; padding: 20px; max-width: 400px; border: 1px solid #ddd; }
-        button { background: #2c3e50; color: white; padding: 10px 20px; border: none; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <h1>Add Room</h1>
-    <p><a href="{% url 'dashboard' %}">Back to Dashboard</a></p>
+{% extends "hostel/base.html" %}
 
-    <form method="post">
+{% block title %}Add Room{% endblock %}
+
+{% block content %}
+    <a class="back-link" href="{% url 'dashboard' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to rooms</a>
+    <div class="page-header"><h1>Add Room</h1></div>
+
+    <form method="post" class="card form-card">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Save Room</button>
+        {% include "hostel/_form_fields.html" %}
+        <div class="form-actions">
+            <button type="submit" class="btn">Save Room</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary">Cancel</a>
+        </div>
     </form>
-</body>
-</html>
+{% endblock %}

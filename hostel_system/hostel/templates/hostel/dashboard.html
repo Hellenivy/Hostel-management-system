@@ -1,65 +1,106 @@
-<!DOCTYPE html>
-<html>
-<head>
-        <h1>Room Occupancy Dashboard</h1>
+{% extends "hostel/base.html" %}
 
-     <p><a href="{% url 'payments' %}">View Payments</a></p>
-      <p><a href="{% url 'add_room' %}">Add Room</a></p>
-      <p><a href="{% url 'add_tenant' %}">Add Tenant</a></p>
-      <p><a href="{% url 'balances' %}">View Rent Balances</a></p>
-      <p><a href="{% url 'complaints' %}">Complaints</a></p>
+{% block title %}Rooms{% endblock %}
 
-        <form method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit">Logout</button>
-    </form>
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Rooms</h1>
+            <p class="page-subtitle">Occupancy across all rooms and who is staying where.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'add_room' %}" class="btn btn-secondary">
+                <svg class="icon"><use href="#i-plus"/></svg> Add room
+            </a>
+            <a href="{% url 'add_tenant' %}" class="btn">
+                <svg class="icon"><use href="#i-plus"/></svg> Add tenant
+            </a>
+        </div>
+    </div>
 
-      <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
-        h1 { color: #2c3e50; }
-        table { width: 100%; border-collapse: collapse; background: white; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        th { background: #2c3e50; color: white; }
-        .Vacant { color: green; font-weight: bold; }
-        .Full { color: red; font-weight: bold; }
-        .Partly { color: orange; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <table>
-        <tr>
-            <th>Room</th>
-            <th>Rent (KES)</th>
-            <th>Capacity</th>
-            <th>Occupants</th>
-            <th>Tenants</th>
-            <th>Status</th>
-        </tr>
+    <div class="stats">
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-door"/></svg> Rooms</div>
+            <div class="stat-value">{{ stats.rooms }}</div>
+            <div class="stat-meta">{{ stats.vacant_rooms }} vacant</div>
+        </div>
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-bed"/></svg> Beds occupied</div>
+            <div class="stat-value">{{ stats.occupied_beds }} <span class="subtle" style="font-size: 16px; font-weight: 500;">/ {{ stats.total_beds }}</span></div>
+            <div class="stat-meta">Across all rooms</div>
+        </div>
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-chart"/></svg> Occupancy</div>
+            <div class="stat-value">{{ stats.occupancy_pct }}%</div>
+            <div class="meter" style="margin-top: 10px;">
+                <div class="meter-track"><div class="meter-fill" style="width: {{ stats.occupancy_pct }}%"></div></div>
+            </div>
+        </div>
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-chat"/></svg> Open complaints</div>
+            <div class="stat-value">{{ stats.open_complaints }}</div>
+            <div class="stat-meta"><a href="{% url 'complaints' %}">View complaints &rarr;</a></div>
+        </div>
+    </div>
 
-        {% for item in room_list %}
-        <tr>
-            <td>{{ item.room.room_number }}</td>
-            <td>{{ item.room.rent_amount }}</td>
-            <td>{{ item.room.capacity }}</td>
-            <td>{{ item.count }}</td>
-            <td>
-                {% for tenant in item.tenants %}
-                    {{ tenant.full_name }}<br>
-                {% empty %}
-                    -
-                {% endfor %}
-            </td>
-            <td>
-                {% if item.status == "Vacant" %}
-                    <span class="Vacant">Vacant</span>
-                {% elif item.status == "Full" %}
-                    <span class="Full">Full</span>
-                {% else %}
-                    <span class="Partly">Partly occupied</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
+    <div class="card table-card">
+        {% if room_list %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Room</th>
+                        <th class="num">Rent (KES)</th>
+                        <th>Occupancy</th>
+                        <th>Tenants</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in room_list %}
+                    <tr>
+                        <td class="strong">{{ item.room.room_number }}</td>
+                        <td class="num">{{ item.room.rent_amount|floatformat:2 }}</td>
+                        <td>
+                            <div class="meter">
+                                <div class="meter-track">
+                                    <div class="meter-fill{% if item.status == 'Full' %} full{% endif %}" style="width: {{ item.occupancy_pct }}%"></div>
+                                </div>
+                                <span class="meter-text">{{ item.count }} / {{ item.room.capacity }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% for tenant in item.tenants %}
+                                <div class="person">
+                                    <span class="avatar">{{ tenant.full_name|slice:":1"|upper }}</span>
+                                    <span class="person-name">{{ tenant.full_name }}</span>
+                                    <a class="edit-link" href="{% url 'edit_tenant' tenant.id %}">Edit</a>
+                                </div>
+                            {% empty %}
+                                <span class="subtle">No tenants</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if item.status == "Vacant" %}
+                                <span class="badge badge-green">Vacant</span>
+                            {% elif item.status == "Full" %}
+                                <span class="badge badge-red">Full</span>
+                            {% else %}
+                                <span class="badge badge-amber">Partly occupied</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <svg class="icon"><use href="#i-door"/></svg>
+                <h3>No rooms yet</h3>
+                <p>Add your first room to start assigning tenants.</p>
+                <a href="{% url 'add_room' %}" class="btn"><svg class="icon"><use href="#i-plus"/></svg> Add room</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,17 +1,25 @@
+import hmac
 import json
+from datetime import timedelta
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .models import Room, Tenant, Payment, Complaint, MpesaTransaction
 from .forms import PaymentForm, RoomForm, TenantForm, ComplaintForm
-from .mpesa import initiate_stk_push,query_stk_push
+from .mpesa import initiate_stk_push, query_stk_push, format_phone_number
+
+# An STK prompt expires on the phone after about a minute; pending requests
+# older than this no longer hold back the tenant's balance.
+STK_PENDING_TIMEOUT = timedelta(minutes=3)
 
 @login_required
 def dashboard(request):
@@ -29,14 +37,36 @@ def dashboard(request):
         else:
             status = "Partly occupied"
 
+        if room.capacity > 0:
+            occupancy_pct = min(100, count * 100 // room.capacity)
+        else:
+            occupancy_pct = 0
+
         room_list.append({
             "room": room,
             "tenants": tenants,
             "count": count,
             "status": status,
+            "occupancy_pct": occupancy_pct,
         })
 
-    return render(request, "hostel/dashboard.html", {"room_list": room_list})
+    total_beds = sum(item["room"].capacity for item in room_list)
+    occupied_beds = sum(item["count"] for item in room_list)
+
+    stats = {
+        "rooms": len(room_list),
+        "vacant_rooms": sum(1 for item in room_list if item["status"] == "Vacant"),
+        "total_beds": total_beds,
+        "occupied_beds": occupied_beds,
+        "occupancy_pct": occupied_beds * 100 // total_beds if total_beds else 0,
+        "open_complaints": Complaint.objects.filter(status="Open").count(),
+    }
+
+    return render(
+        request,
+        "hostel/dashboard.html",
+        {"room_list": room_list, "stats": stats},
+    )
 
 
 @login_required
@@ -81,6 +111,19 @@ def add_tenant(request):
     return render(request, "hostel/add_tenant.html", {"form": form})
 
 
+@login_required
+def edit_tenant(request, tenant_id):
+    tenant = get_object_or_404(Tenant, id=tenant_id)
+    if request.method == "POST":
+        form = TenantForm(request.POST, instance=tenant)
+        if form.is_valid():
+            form.save()
+            return redirect('dashboard')
+    else:
+        form = TenantForm(instance=tenant)
+    return render(request, "hostel/edit_tenant.html", {"form": form, "tenant": tenant})
+
+
 
 @login_required
 def balances(request):
@@ -114,10 +157,19 @@ def balances(request):
             "status": status,
         })
 
+    stats = {
+        "rent_due": sum(item["rent_due"] for item in balance_list),
+        "collected": sum(item["total_paid"] for item in balance_list),
+        "outstanding": sum(
+            item["balance"] for item in balance_list if item["balance"] > 0
+        ),
+        "owing_count": sum(1 for item in balance_list if item["balance"] > 0),
+    }
+
     return render(
         request,
         "hostel/balances.html",
-        {"balance_list": balance_list}
+        {"balance_list": balance_list, "stats": stats}
     )
 
 
@@ -150,8 +202,23 @@ def resolve_complaint(request, complaint_id):
 
 
 
+def _valid_callback_token(token):
+    expected = settings.MPESA_CALLBACK_TOKEN
+
+    if not expected:
+        return False
+
+    return hmac.compare_digest(token.encode(), expected.encode())
+
+
 @csrf_exempt
-def mpesa_callback(request):
+def mpesa_callback(request, token):
+    # Reject anything that does not carry the secret callback token. A 404
+    # avoids confirming to a prober that the endpoint exists.
+    if not _valid_callback_token(token):
+        print("M-Pesa callback: invalid token")
+        raise Http404
+
     if request.method != "POST":
         return JsonResponse(
             {"ResultCode": 1, "ResultDesc": "POST required"},
@@ -225,8 +292,13 @@ def mpesa_callback(request):
     receipt = values.get("MpesaReceiptNumber")
     callback_amount = values.get("Amount")
 
-    if not receipt or callback_amount is None:
-        print("M-Pesa callback: receipt or amount missing")
+    if (
+        not isinstance(receipt, str)
+        or not receipt.isalnum()
+        or len(receipt) > 20
+        or callback_amount is None
+    ):
+        print("M-Pesa callback: receipt or amount missing or invalid")
         return JsonResponse(
             {"ResultCode": 0, "ResultDesc": "Verification pending"}
         )
@@ -326,6 +398,16 @@ def request_mpesa_payment(request, tenant_id):
         )
         return redirect("balances")
 
+    phone = format_phone_number(tenant.phone)
+
+    if phone is None:
+        messages.error(
+            request,
+            f"'{tenant.phone}' is not a valid Safaricom number. "
+            "Use the format 07XXXXXXXX or 2547XXXXXXXX.",
+        )
+        return redirect("balances")
+
     rent_due = (
         tenant.room.rent_amount
         if tenant.room
@@ -343,6 +425,7 @@ def request_mpesa_payment(request, tenant_id):
         MpesaTransaction.objects.filter(
             tenant=tenant,
             status="Pending",
+            created_at__gte=timezone.now() - STK_PENDING_TIMEOUT,
         ).values_list("amount", flat=True),
         Decimal("0.00"),
     )
@@ -364,7 +447,7 @@ def request_mpesa_payment(request, tenant_id):
 
     try:
         result = initiate_stk_push(
-            phone=tenant.phone,
+            phone=phone,
             amount=amount,
             tenant_id=tenant.id,
         )

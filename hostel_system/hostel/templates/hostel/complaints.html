@@ -1,61 +1,75 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Complaints</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f4f6f8; }
-        h1 { color: #2c3e50; }
-        table { width: 100%; border-collapse: collapse; background: white; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        th { background: #2c3e50; color: white; }
-        .open { color: red; font-weight: bold; }
-        .resolved { color: green; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <h1>Complaints</h1>
-    <p><a href="{% url 'dashboard' %}">Back to Dashboard</a></p>
-    <p><a href="{% url 'add_complaint' %}">Add Complaint</a></p>
+{% extends "hostel/base.html" %}
 
-    <table>
-        <tr>
-            <th>Tenant</th>
-            <th>Room</th>
-            <th>Complaint</th>
-            <th>Status</th>
-            <th>Date</th>
-            <th>Action</th>
-        </tr>
+{% block title %}Complaints{% endblock %}
 
-        {% for c in complaints %}
-        <tr>
-            <td>{{ c.tenant.full_name }}</td>
-            <td>{{ c.tenant.room.room_number }}</td>
-            <td>{{ c.description }}</td>
-            <td>
-                {% if c.status == "Open" %}
-                    <span class="open">Open</span>
-                {% else %}
-                    <span class="resolved">{{ c.status }}</span>
-                {% endif %}
-            </td>
-            <td>{{ c.created_at }}</td>
-            <td>
-                {% if c.status == "Open" %}
-                    <form method="post" action="{% url 'resolve_complaint' c.id %}">
-                        {% csrf_token %}
-                        <button type="submit">Mark as Resolved</button>
-                    </form>
-                {% else %}
-                    -
-                {% endif %}
-            </td>
-        </tr>
-        {% empty %}
-        <tr>
-            <td colspan="6">No complaints yet.</td>
-        </tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Complaints</h1>
+            <p class="page-subtitle">Issues reported by tenants and their status.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'add_complaint' %}" class="btn">
+                <svg class="icon"><use href="#i-plus"/></svg> Add complaint
+            </a>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        {% if complaints %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tenant</th>
+                        <th>Room</th>
+                        <th>Complaint</th>
+                        <th>Status</th>
+                        <th>Reported</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in complaints %}
+                    <tr>
+                        <td>
+                            <div class="person">
+                                <span class="avatar">{{ c.tenant.full_name|slice:":1"|upper }}</span>
+                                <span class="person-name">{{ c.tenant.full_name }}</span>
+                            </div>
+                        </td>
+                        <td>{{ c.tenant.room.room_number|default:"—" }}</td>
+                        <td style="max-width: 360px;">{{ c.description }}</td>
+                        <td>
+                            {% if c.status == "Open" %}
+                                <span class="badge badge-red">Open</span>
+                            {% else %}
+                                <span class="badge badge-green">{{ c.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="muted" style="white-space: nowrap;">{{ c.created_at|date:"d M Y" }}</td>
+                        <td class="num">
+                            {% if c.status == "Open" %}
+                                <form method="post" action="{% url 'resolve_complaint' c.id %}" style="margin: 0;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-secondary">
+                                        <svg class="icon"><use href="#i-check"/></svg> Resolve
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <svg class="icon"><use href="#i-chat"/></svg>
+                <h3>No complaints</h3>
+                <p>Nothing has been reported. Nice.</p>
+                <a href="{% url 'add_complaint' %}" class="btn"><svg class="icon"><use href="#i-plus"/></svg> Add complaint</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

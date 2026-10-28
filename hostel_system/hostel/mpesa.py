@@ -40,7 +40,34 @@ def generate_password(timestamp):
     ).decode()
 
 
+def format_phone_number(phone):
+    # Daraja only accepts 2547XXXXXXXX / 2541XXXXXXXX.
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+
+    if digits.startswith("0") and len(digits) == 10:
+        digits = "254" + digits[1:]
+    elif len(digits) == 9 and digits[0] in "17":
+        digits = "254" + digits
+
+    if len(digits) != 12 or not digits.startswith(("2547", "2541")):
+        return None
+
+    return digits
+
+
+def build_callback_url():
+    # Daraja does not sign callbacks, so a secret path segment is what
+    # proves a callback came from Safaricom and not from an attacker.
+    token = settings.MPESA_CALLBACK_TOKEN
+
+    if not token:
+        raise ValueError("MPESA_CALLBACK_TOKEN is not configured.")
+
+    return f"{settings.MPESA_CALLBACK_URL.rstrip('/')}/{token}/"
+
+
 def initiate_stk_push(phone, amount, tenant_id):
+    callback_url = build_callback_url()
     access_token = get_access_token()
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -55,7 +82,7 @@ def initiate_stk_push(phone, amount, tenant_id):
         "PartyA": phone,
         "PartyB": settings.MPESA_SHORTCODE,
         "PhoneNumber": phone,
-        "CallBackURL": settings.MPESA_CALLBACK_URL,
+        "CallBackURL": callback_url,
         "AccountReference": f"TENANT-{tenant_id}",
         "TransactionDesc": "Hostel Rent Payment",
     }
@@ -69,8 +96,13 @@ def initiate_stk_push(phone, amount, tenant_id):
         timeout=30,
     )
 
-    response.raise_for_status()
-    return response.json()
+    # Daraja returns its error details as JSON on 4xx/5xx, so read them
+    # instead of raising and losing the errorMessage.
+    try:
+        return response.json()
+    except ValueError:
+        response.raise_for_status()
+        raise
 
 
 def query_stk_push(checkout_request_id):

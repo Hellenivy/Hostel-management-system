@@ -1,0 +1,17 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Edit {{ tenant.full_name }}{% endblock %}
+
+{% block content %}
+    <a class="back-link" href="{% url 'dashboard' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to rooms</a>
+    <div class="page-header"><h1>Edit Tenant: {{ tenant.full_name }}</h1></div>
+
+    <form method="post" class="card form-card">
+        {% csrf_token %}
+        {% include "hostel/_form_fields.html" %}
+        <div class="form-actions">
+            <button type="submit" class="btn">Save Changes</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

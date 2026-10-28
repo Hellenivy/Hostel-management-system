@@ -1,168 +1,127 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Rent Balances</title>
+{% extends "hostel/base.html" %}
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
-            background: #f4f6f8;
-        }
+{% block title %}Rent Balances{% endblock %}
 
-        h1 {
-            color: #2c3e50;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-        }
-
-        th, td {
-            padding: 12px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-
-        th {
-            background: #2c3e50;
-            color: white;
-        }
-
-        .paid {
-            color: green;
-            font-weight: bold;
-        }
-
-        .owes {
-            color: red;
-            font-weight: bold;
-        }
-
-        .overpaid {
-            color: blue;
-            font-weight: bold;
-        }
-
-        .messages {
-            padding: 10px;
-            margin-bottom: 15px;
-            background: white;
-        }
-
-        .pay-button {
-            background: #16834a;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-
-        input[type="number"] {
-            width: 100px;
-            padding: 7px;
-            margin-bottom: 6px;
-        }
-    </style>
-</head>
-
-<body>
-    <h1>Rent Balances</h1>
-
-    <p>
-        <a href="{% url 'dashboard' %}">Back to Dashboard</a>
-    </p>
-
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <p>{{ message }}</p>
-            {% endfor %}
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Rent balances</h1>
+            <p class="page-subtitle">What each tenant owes, and M-Pesa requests for anything outstanding.</p>
         </div>
-    {% endif %}
+    </div>
 
-    <table>
-        <tr>
-            <th>Tenant</th>
-            <th>Room</th>
-            <th>Rent Due (KES)</th>
-            <th>Total Paid (KES)</th>
-            <th>Balance (KES)</th>
-            <th>Status</th>
-            <th>M-Pesa Payment</th>
-        </tr>
+    <div class="stats">
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-receipt"/></svg> Rent due</div>
+            <div class="stat-value">{{ stats.rent_due|floatformat:"0g" }}</div>
+            <div class="stat-meta">KES across all tenants</div>
+        </div>
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-check"/></svg> Collected</div>
+            <div class="stat-value">{{ stats.collected|floatformat:"0g" }}</div>
+            <div class="stat-meta">KES received</div>
+        </div>
+        <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="#i-alert"/></svg> Outstanding</div>
+            <div class="stat-value">{{ stats.outstanding|floatformat:"0g" }}</div>
+            <div class="stat-meta">{{ stats.owing_count }} tenant{{ stats.owing_count|pluralize }} owing</div>
+        </div>
+    </div>
 
-        {% for item in balance_list %}
-        <tr>
-            <td>{{ item.tenant.full_name }}</td>
+    <div class="card table-card">
+        {% if balance_list %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tenant</th>
+                        <th>Room</th>
+                        <th class="num">Rent due</th>
+                        <th class="num">Paid</th>
+                        <th class="num">Balance</th>
+                        <th>Status</th>
+                        <th>Request payment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in balance_list %}
+                    <tr>
+                        <td>
+                            <div class="person">
+                                <span class="avatar">{{ item.tenant.full_name|slice:":1"|upper }}</span>
+                                <div style="min-width: 0;">
+                                    <div class="person-name">{{ item.tenant.full_name }}</div>
+                                    <div class="subtle" style="font-size: 12px;">{{ item.tenant.phone }}</div>
+                                </div>
+                                <a class="edit-link" href="{% url 'edit_tenant' item.tenant.id %}">Edit</a>
+                            </div>
+                        </td>
 
-            <td>
-                {% if item.tenant.room %}
-                    {{ item.tenant.room.room_number }}
-                {% else %}
-                    No room assigned
-                {% endif %}
-            </td>
+                        <td>
+                            {% if item.tenant.room %}
+                                {{ item.tenant.room.room_number }}
+                            {% else %}
+                                <span class="subtle">Unassigned</span>
+                            {% endif %}
+                        </td>
 
-            <td>{{ item.rent_due|floatformat:2 }}</td>
+                        <td class="num">{{ item.rent_due|floatformat:"2g" }}</td>
 
-            <td>{{ item.total_paid|floatformat:2 }}</td>
+                        <td class="num">{{ item.total_paid|floatformat:"2g" }}</td>
 
-            <td>
-                {% if item.balance < 0 %}
-                    -KES {{ item.balance|floatformat:2|cut:"-" }}
-                {% else %}
-                    KES {{ item.balance|floatformat:2 }}
-                {% endif %}
-            </td>
+                        <td class="num strong">
+                            {% if item.balance < 0 %}
+                                &minus;{{ item.balance|floatformat:"2g"|cut:"-" }}
+                            {% else %}
+                                {{ item.balance|floatformat:"2g" }}
+                            {% endif %}
+                        </td>
 
-            <td>
-                {% if item.status == "Overpaid" %}
-                    <span class="overpaid">Overpaid</span>
+                        <td>
+                            {% if item.status == "Overpaid" %}
+                                <span class="badge badge-gray">Overpaid</span>
+                            {% elif item.status == "Paid up" %}
+                                <span class="badge badge-green">Paid up</span>
+                            {% else %}
+                                <span class="badge badge-red">Owes</span>
+                            {% endif %}
+                        </td>
 
-                {% elif item.status == "Paid up" %}
-                    <span class="paid">Paid up</span>
-
-                {% else %}
-                    <span class="owes">Owes</span>
-                {% endif %}
-            </td>
-
-            <td>
-                {% if item.balance > 0 %}
-                    <form method="post"
-                          action="{% url 'request_mpesa_payment' item.tenant.id %}">
-                        {% csrf_token %}
-
-                        <label>
-                            Amount (KES):
-                            <input
-                                type="number"
-                                name="amount"
-                                min="1"
-                                max="{{ item.balance }}"
-                                step="1"
-                                required
-                            >
-                        </label>
-
-                        <br>
-
-                        <button type="submit" class="pay-button">
-                            Request M-Pesa
-                        </button>
-                    </form>
-                {% else %}
-                    No payment due
-                {% endif %}
-            </td>
-        </tr>
-
-        {% empty %}
-        <tr>
-            <td colspan="7">No tenants yet.</td>
-        </tr>
-        {% endfor %}
+                        <td>
+                            {% if item.balance > 0 %}
+                                <form method="post" class="inline-form"
+                                      action="{% url 'request_mpesa_payment' item.tenant.id %}">
+                                    {% csrf_token %}
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        min="1"
+                                        max="{{ item.balance }}"
+                                        step="1"
+                                        placeholder="KES"
+                                        aria-label="Amount in KES for {{ item.tenant.full_name }}"
+                                        required
+                                    >
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <svg class="icon"><use href="#i-phone"/></svg> M-Pesa
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="subtle">Nothing due</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <svg class="icon"><use href="#i-users"/></svg>
+                <h3>No tenants yet</h3>
+                <p>Balances appear here once tenants are added.</p>
+                <a href="{% url 'add_tenant' %}" class="btn"><svg class="icon"><use href="#i-plus"/></svg> Add tenant</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
