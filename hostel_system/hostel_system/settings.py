@@ -94,7 +94,6 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
-
 # M-Pesa Daraja
 MPESA_BASE_URL = os.getenv("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
 MPESA_SHORTCODE = os.getenv("MPESA_SHORTCODE", "174379")
