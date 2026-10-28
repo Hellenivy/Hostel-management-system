@@ -11,5 +11,3 @@ admin.site.register(Complaint)
 class RentReminderAdmin(admin.ModelAdmin):
     list_display = ("tenant", "kind", "period", "amount_due", "status", "sent_at")
     list_filter = ("kind", "status", "period")
-
-# Register your models here.

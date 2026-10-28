@@ -1,0 +1,91 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Users{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Users</h1>
+            <p class="page-subtitle">Admins manage the hostel. Tenants can only see their own account and complaints.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'add_tenant_account' %}" class="btn btn-secondary">
+                <svg class="icon"><use href="#i-plus"/></svg> Tenant login
+            </a>
+            <a href="{% url 'add_admin' %}" class="btn">
+                <svg class="icon"><use href="#i-plus"/></svg> New admin
+            </a>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Linked tenant</th>
+                        <th>Status</th>
+                        <th>Last login</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>
+                            <div class="person">
+                                <span class="avatar">{{ u.username|slice:":1"|upper }}</span>
+                                <div style="min-width: 0;">
+                                    <div class="person-name">{{ u.username }}{% if u == request.user %} <span class="subtle">(you)</span>{% endif %}</div>
+                                    {% if u.email %}<div class="subtle" style="font-size: 12px;">{{ u.email }}</div>{% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if u.is_staff %}
+                                <span class="badge badge-green">Admin</span>
+                            {% elif u.tenant_profile %}
+                                <span class="badge badge-gray">Tenant</span>
+                            {% else %}
+                                <span class="badge badge-amber">No role</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.tenant_profile %}
+                                <a href="{% url 'edit_tenant' u.tenant_profile.id %}">{{ u.tenant_profile.full_name }}</a>
+                            {% else %}
+                                <span class="subtle">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.is_active %}
+                                <span class="badge badge-green">Active</span>
+                            {% else %}
+                                <span class="badge badge-red">Deactivated</span>
+                            {% endif %}
+                        </td>
+                        <td class="muted">{{ u.last_login|date:"d M Y, H:i"|default:"Never" }}</td>
+                        <td class="num">
+                            <div style="display: inline-flex; gap: 8px;">
+                                {% if u == request.user %}
+                                    <a href="{% url 'change_password' %}" class="btn btn-sm btn-secondary">Change password</a>
+                                {% elif request.user.is_superuser or not u.is_superuser %}
+                                    <a href="{% url 'set_user_password' u.id %}" class="btn btn-sm btn-secondary">Reset password</a>
+                                    <form method="post" action="{% url 'toggle_user_active' u.id %}" style="margin: 0;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-secondary">
+                                            {% if u.is_active %}Deactivate{% else %}Reactivate{% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

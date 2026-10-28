@@ -1,0 +1,105 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}My account{% endblock %}
+
+{% block content %}
+    {% if not tenant %}
+        <div class="card empty-state">
+            <svg class="icon"><use href="#i-users"/></svg>
+            <h3>Your account isn't set up yet</h3>
+            <p>Your login isn't linked to a tenant record. Please contact the hostel admin.</p>
+        </div>
+    {% else %}
+        <div class="page-header">
+            <div>
+                <h1>Hi, {{ tenant.full_name }}</h1>
+                <p class="page-subtitle">Your room, rent and payment history.</p>
+            </div>
+            <div class="header-actions">
+                <a href="{% url 'add_complaint' %}" class="btn">
+                    <svg class="icon"><use href="#i-plus"/></svg> Report an issue
+                </a>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="card stat">
+                <div class="stat-label"><svg class="icon"><use href="#i-door"/></svg> Room</div>
+                <div class="stat-value">{{ tenant.room.room_number|default:"—" }}</div>
+                <div class="stat-meta">
+                    {% if tenant.room %}KES {{ tenant.room.rent_amount|floatformat:"0g" }} rent{% else %}No room assigned{% endif %}
+                </div>
+            </div>
+            <div class="card stat">
+                <div class="stat-label"><svg class="icon"><use href="#i-wallet"/></svg> Balance</div>
+                <div class="stat-value">
+                    {% if balance < 0 %}&minus;{{ balance|floatformat:"0g"|cut:"-" }}{% else %}{{ balance|floatformat:"0g" }}{% endif %}
+                </div>
+                <div class="stat-meta">
+                    {% if balance > 0 %}
+                        <span class="badge badge-red">Owes</span>
+                    {% elif balance < 0 %}
+                        <span class="badge badge-gray">Overpaid</span>
+                    {% else %}
+                        <span class="badge badge-green">Paid up</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card stat">
+                <div class="stat-label"><svg class="icon"><use href="#i-chat"/></svg> Open complaints</div>
+                <div class="stat-value">{{ open_complaints }}</div>
+                <div class="stat-meta"><a href="{% url 'complaints' %}">View my complaints &rarr;</a></div>
+            </div>
+        </div>
+
+        {% if balance > 0 and tenant.room %}
+            <div class="card" style="padding: 16px 20px; margin-bottom: 24px;">
+                <strong>How to pay:</strong>
+                M-Pesa Paybill <span class="code">{{ paybill }}</span>,
+                account <span class="code">TENANT-{{ tenant.id }}</span>.
+            </div>
+        {% endif %}
+
+        <div class="card" style="padding: 20px; margin-bottom: 24px;">
+            <h2 style="margin: 0 0 14px; font-size: 16px;">My details</h2>
+            <div class="stats" style="margin: 0;">
+                <div><div class="muted">Full name</div><div class="strong">{{ tenant.full_name }}</div></div>
+                <div><div class="muted">Phone</div><div class="strong">{{ tenant.phone }}</div></div>
+                <div><div class="muted">ID number</div><div class="strong">{{ tenant.id_number }}</div></div>
+                <div><div class="muted">Moved in</div><div class="strong">{{ tenant.move_in_date|date:"d M Y" }}</div></div>
+            </div>
+        </div>
+
+        <h2 style="margin: 0 0 12px; font-size: 16px;">My payments</h2>
+        <div class="card table-card">
+            {% if payments %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th class="num">Amount (KES)</th>
+                            <th>M-Pesa code</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in payments %}
+                        <tr>
+                            <td class="muted">{{ p.date_paid|date:"d M Y, H:i" }}</td>
+                            <td class="num strong">{{ p.amount|floatformat:"2g" }}</td>
+                            <td>{% if p.mpesa_code %}<span class="code">{{ p.mpesa_code }}</span>{% else %}<span class="subtle">Cash / manual</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <div class="empty-state">
+                    <svg class="icon"><use href="#i-receipt"/></svg>
+                    <h3>No payments yet</h3>
+                    <p>Your payments will appear here once they're received.</p>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}

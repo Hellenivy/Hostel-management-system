@@ -1,5 +1,6 @@
 import hmac
 import json
+import logging
 from datetime import timedelta
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
@@ -13,15 +14,25 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import SetPasswordForm
+
+from .decorators import staff_required
 from .models import Room, Tenant, Payment, Complaint, MpesaTransaction
-from .forms import PaymentForm, RoomForm, TenantForm, ComplaintForm
+from .forms import (
+    PaymentForm, RoomForm, TenantForm, ComplaintForm,
+    TenantComplaintForm, AdminUserForm, TenantAccountForm,
+)
 from .mpesa import initiate_stk_push, query_stk_push, format_phone_number
+
+User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # An STK prompt expires on the phone after about a minute; pending requests
 # older than this no longer hold back the tenant's balance.
 STK_PENDING_TIMEOUT = timedelta(minutes=3)
 
-@login_required
+@staff_required
 def dashboard(request):
     rooms = Room.objects.all()
     room_list = []
@@ -69,14 +80,14 @@ def dashboard(request):
     )
 
 
-@login_required
+@staff_required
 def payments(request):
     all_payments = Payment.objects.all().order_by('-date_paid')
     return render(request, "hostel/payments.html", {"payments": all_payments})
 
 
 
-@login_required
+@staff_required
 def add_payment(request):
     if request.method == "POST":
         form = PaymentForm(request.POST)
@@ -88,7 +99,7 @@ def add_payment(request):
     return render(request, "hostel/add_payment.html", {"form": form})
 
 
-@login_required
+@staff_required
 def add_room(request):
     if request.method == "POST":
         form = RoomForm(request.POST)
@@ -99,7 +110,7 @@ def add_room(request):
         form = RoomForm()
     return render(request, "hostel/add_room.html", {"form": form})
 
-@login_required
+@staff_required
 def add_tenant(request):
     if request.method == "POST":
         form = TenantForm(request.POST)
@@ -111,7 +122,7 @@ def add_tenant(request):
     return render(request, "hostel/add_tenant.html", {"form": form})
 
 
-@login_required
+@staff_required
 def edit_tenant(request, tenant_id):
     tenant = get_object_or_404(Tenant, id=tenant_id)
     if request.method == "POST":
@@ -125,7 +136,7 @@ def edit_tenant(request, tenant_id):
 
 
 
-@login_required
+@staff_required
 def balances(request):
     tenants = Tenant.objects.all()
     balance_list = []
@@ -175,24 +186,47 @@ def balances(request):
 
 @login_required
 def complaints(request):
-    all_complaints = Complaint.objects.all().order_by('-created_at')
-    return render(request, "hostel/complaints.html", {"complaints": all_complaints})
+    # Admins see every complaint; a tenant sees only their own.
+    if request.user.is_staff:
+        visible = Complaint.objects.all()
+    else:
+        visible = Complaint.objects.filter(tenant__user=request.user)
+    return render(
+        request,
+        "hostel/complaints.html",
+        {"complaints": visible.select_related("tenant__room").order_by('-created_at')},
+    )
 
 
 @login_required
 def add_complaint(request):
+    tenant = None
+    form_class = ComplaintForm
+
+    if not request.user.is_staff:
+        tenant = _own_tenant(request)
+        if tenant is None:
+            messages.error(request, "Your login is not linked to a tenant record yet.")
+            return redirect('my_account')
+        # Tenants can't pick who the complaint is for.
+        form_class = TenantComplaintForm
+
     if request.method == "POST":
-        form = ComplaintForm(request.POST)
+        form = form_class(request.POST)
         if form.is_valid():
-            form.save()
+            complaint = form.save(commit=False)
+            if tenant is not None:
+                complaint.tenant = tenant
+            complaint.save()
+            messages.success(request, "Complaint submitted.")
             return redirect('complaints')
     else:
-        form = ComplaintForm()
+        form = form_class()
     return render(request, "hostel/add_complaint.html", {"form": form})
 
 
 
-@login_required
+@staff_required
 def resolve_complaint(request, complaint_id):
     complaint = get_object_or_404(Complaint, id=complaint_id)
     if request.method == "POST":
@@ -216,7 +250,7 @@ def mpesa_callback(request, token):
     # Reject anything that does not carry the secret callback token. A 404
     # avoids confirming to a prober that the endpoint exists.
     if not _valid_callback_token(token):
-        print("M-Pesa callback: invalid token")
+        logger.warning("M-Pesa callback: invalid token")
         raise Http404
 
     if request.method != "POST":
@@ -229,7 +263,6 @@ def mpesa_callback(request, token):
     try:
         data = json.loads(request.body.decode("utf-8"))
         callback = data["Body"]["stkCallback"]
-        print("M-PESA CALLBACK DATA:", callback)
 
         checkout_id = callback.get("CheckoutRequestID")
         result_code = callback.get("ResultCode")
@@ -252,7 +285,7 @@ def mpesa_callback(request, token):
     ).first()
 
     if mpesa_transaction is None:
-        print("M-Pesa callback: transaction not found")
+        logger.warning("M-Pesa callback: transaction not found")
         return JsonResponse(
             {"ResultCode": 0, "ResultDesc": "Received"}
         )
@@ -298,7 +331,7 @@ def mpesa_callback(request, token):
         or len(receipt) > 20
         or callback_amount is None
     ):
-        print("M-Pesa callback: receipt or amount missing or invalid")
+        logger.warning("M-Pesa callback: receipt or amount missing or invalid")
         return JsonResponse(
             {"ResultCode": 0, "ResultDesc": "Verification pending"}
         )
@@ -306,14 +339,14 @@ def mpesa_callback(request, token):
     try:
         received_amount = Decimal(str(callback_amount))
     except (ValueError, TypeError, ArithmeticError):
-        print("M-Pesa callback: invalid amount")
+        logger.warning("M-Pesa callback: invalid amount")
         return JsonResponse(
             {"ResultCode": 0, "ResultDesc": "Verification pending"}
         )
 
     # Reject payments whose amount differs from the recorded transaction.
     if received_amount != mpesa_transaction.amount:
-        print("M-Pesa callback: amount mismatch")
+        logger.warning("M-Pesa callback: amount mismatch")
         return JsonResponse(
             {"ResultCode": 0, "ResultDesc": "Verification pending"}
         )
@@ -347,7 +380,7 @@ def mpesa_callback(request, token):
                 existing_payment.tenant_id != locked_transaction.tenant_id
                 or existing_payment.amount != locked_transaction.amount
             ):
-                print("M-Pesa callback: receipt conflict")
+                logger.warning("M-Pesa callback: receipt conflict")
                 return JsonResponse(
                     {"ResultCode": 0, "ResultDesc": "Receipt conflict"}
                 )
@@ -369,14 +402,14 @@ def mpesa_callback(request, token):
             ]
         )
 
-    print("M-Pesa callback processed")
+    logger.info("M-Pesa callback processed")
 
     return JsonResponse(
         {"ResultCode": 0, "ResultDesc": "Accepted"}
     )
 
 
-@login_required
+@staff_required
 @require_POST
 def request_mpesa_payment(request, tenant_id):
     tenant = get_object_or_404(Tenant, id=tenant_id)
@@ -452,9 +485,6 @@ def request_mpesa_payment(request, tenant_id):
             tenant_id=tenant.id,
         )
 
-        # Diagnostic: display Safaricom's initial response.
-        print("M-PESA INITIAL RESPONSE:", result)
-
         checkout_id = result.get("CheckoutRequestID")
         merchant_id = result.get("MerchantRequestID")
 
@@ -486,8 +516,7 @@ def request_mpesa_payment(request, tenant_id):
         )
 
     except Exception as error:
-        # Log exception for troubleshooting.
-        print("M-PESA REQUEST ERROR:", str(error))
+        logger.exception("M-Pesa STK push request failed: %s", error)
 
         mpesa_transaction.status = "Failed"
         mpesa_transaction.save(update_fields=["status"])
@@ -501,6 +530,128 @@ def request_mpesa_payment(request, tenant_id):
     return redirect("balances")
 
 
+# ---------- User management (admins only) ----------
+
+@staff_required
+def users(request):
+    all_users = (
+        User.objects.select_related("tenant_profile")
+        .order_by("-is_staff", "username")
+    )
+    return render(request, "hostel/users.html", {"users": all_users})
 
 
-# Create your views here.
+@staff_required
+def add_admin(request):
+    if request.method == "POST":
+        form = AdminUserForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            messages.success(request, f"Admin account '{user.username}' created.")
+            return redirect("users")
+    else:
+        form = AdminUserForm()
+    return render(request, "hostel/user_form.html", {
+        "form": form,
+        "title": "New admin",
+        "subtitle": "Admins can manage rooms, tenants, payments and other users.",
+        "submit_label": "Create admin",
+    })
+
+
+@staff_required
+def add_tenant_account(request):
+    if request.method == "POST":
+        form = TenantAccountForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            messages.success(
+                request,
+                f"Login '{user.username}' created for {user.tenant_profile.full_name}.",
+            )
+            return redirect("users")
+    else:
+        form = TenantAccountForm(initial={"tenant": request.GET.get("tenant")})
+    return render(request, "hostel/user_form.html", {
+        "form": form,
+        "title": "New tenant login",
+        "subtitle": "The tenant will only see their own room, balance, payments and complaints.",
+        "submit_label": "Create login",
+    })
+
+
+def _can_manage(actor, target):
+    # A regular admin must not be able to take over a superuser's account.
+    return actor.is_superuser or not target.is_superuser
+
+
+@staff_required
+def set_user_password(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+
+    if user == request.user:
+        return redirect("change_password")
+
+    if not _can_manage(request.user, user):
+        messages.error(request, "Only a superuser can reset a superuser's password.")
+        return redirect("users")
+
+    if request.method == "POST":
+        form = SetPasswordForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Password for '{user.username}' has been reset.")
+            return redirect("users")
+    else:
+        form = SetPasswordForm(user)
+    return render(request, "hostel/user_form.html", {
+        "form": form,
+        "title": f"Reset password: {user.username}",
+        "subtitle": "Set a new password and share it with the user securely. They can change it after logging in.",
+        "submit_label": "Reset password",
+    })
+
+
+@staff_required
+@require_POST
+def toggle_user_active(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+
+    if user == request.user:
+        messages.error(request, "You can't deactivate your own account.")
+        return redirect("users")
+
+    if not _can_manage(request.user, user):
+        messages.error(request, "Only a superuser can deactivate a superuser.")
+        return redirect("users")
+
+    user.is_active = not user.is_active
+    user.save(update_fields=["is_active"])
+    state = "reactivated" if user.is_active else "deactivated"
+    messages.success(request, f"Account '{user.username}' {state}.")
+    return redirect("users")
+
+
+# ---------- Tenant portal ----------
+
+def _own_tenant(request):
+    # The only tenant record a tenant user may ever see.
+    return Tenant.objects.filter(user=request.user).select_related("room").first()
+
+
+@login_required
+def my_account(request):
+    if request.user.is_staff:
+        return redirect("dashboard")
+
+    tenant = _own_tenant(request)
+    if tenant is None:
+        return render(request, "hostel/my_account.html", {"tenant": None})
+
+    return render(request, "hostel/my_account.html", {
+        "tenant": tenant,
+        "balance": tenant.balance(),
+        "payments": tenant.payment_set.order_by("-date_paid"),
+        "open_complaints": tenant.complaint_set.filter(status="Open").count(),
+        "paybill": settings.MPESA_SHORTCODE,
+    })

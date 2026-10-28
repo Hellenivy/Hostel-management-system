@@ -4,7 +4,12 @@
 
 {% block content %}
     <a class="back-link" href="{% url 'complaints' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to complaints</a>
-    <div class="page-header"><h1>Add Complaint</h1></div>
+    <div class="page-header">
+        <div>
+            <h1>{% if request.user.is_staff %}Add Complaint{% else %}Report an issue{% endif %}</h1>
+            {% if not request.user.is_staff %}<p class="page-subtitle">The hostel admin will see this and follow up.</p>{% endif %}
+        </div>
+    </div>
 
     <form method="post" class="card form-card">
         {% csrf_token %}

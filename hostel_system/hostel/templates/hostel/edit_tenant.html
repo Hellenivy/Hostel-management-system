@@ -4,7 +4,18 @@
 
 {% block content %}
     <a class="back-link" href="{% url 'dashboard' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to rooms</a>
-    <div class="page-header"><h1>Edit Tenant: {{ tenant.full_name }}</h1></div>
+    <div class="page-header">
+        <div>
+            <h1>Edit Tenant: {{ tenant.full_name }}</h1>
+            <p class="page-subtitle">
+                {% if tenant.user %}
+                    Portal login: <span class="code">{{ tenant.user.username }}</span>
+                {% else %}
+                    No portal login yet. <a href="{% url 'add_tenant_account' %}?tenant={{ tenant.id }}">Create one</a>
+                {% endif %}
+            </p>
+        </div>
+    </div>
 
     <form method="post" class="card form-card">
         {% csrf_token %}

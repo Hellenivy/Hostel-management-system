@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
 from .models import Payment,Room,Tenant,Complaint
 
 
@@ -27,4 +28,48 @@ class TenantForm(forms.ModelForm):
 class ComplaintForm(forms.ModelForm):
     class Meta:
         model = Complaint
-        fields = ['tenant', 'description']        
+        fields = ['tenant', 'description']
+
+
+class TenantComplaintForm(forms.ModelForm):
+    # Tenants only describe the issue; the view attaches their own record.
+    class Meta:
+        model = Complaint
+        fields = ['description']
+        labels = {'description': 'What is the issue?'}
+
+
+class AdminUserForm(UserCreationForm):
+    class Meta(UserCreationForm.Meta):
+        fields = ('username', 'first_name', 'last_name', 'email')
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.is_staff = True
+        if commit:
+            user.save()
+        return user
+
+
+class TenantAccountForm(UserCreationForm):
+    tenant = forms.ModelChoiceField(
+        queryset=Tenant.objects.none(),
+        help_text="Only tenants without a login are listed.",
+    )
+
+    class Meta(UserCreationForm.Meta):
+        fields = ('tenant', 'username')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tenant'].queryset = Tenant.objects.filter(user__isnull=True).order_by('full_name')
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.is_staff = False
+        if commit:
+            user.save()
+            tenant = self.cleaned_data['tenant']
+            tenant.user = user
+            tenant.save(update_fields=['user'])
+        return user        

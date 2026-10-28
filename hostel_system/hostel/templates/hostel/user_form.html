@@ -1,0 +1,22 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <a class="back-link" href="{% url 'users' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to users</a>
+    <div class="page-header">
+        <div>
+            <h1>{{ title }}</h1>
+            <p class="page-subtitle">{{ subtitle }}</p>
+        </div>
+    </div>
+
+    <form method="post" class="card form-card">
+        {% csrf_token %}
+        {% include "hostel/_form_fields.html" %}
+        <div class="form-actions">
+            <button type="submit" class="btn">{{ submit_label }}</button>
+            <a href="{% url 'users' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

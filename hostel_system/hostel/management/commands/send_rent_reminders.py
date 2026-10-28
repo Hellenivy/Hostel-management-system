@@ -1,11 +1,9 @@
 from datetime import date, timedelta
-from decimal import Decimal
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Sum
 
-from hostel.models import Payment, RentReminder, Tenant
+from hostel.models import RentReminder, Tenant
 from hostel.mpesa import format_phone_number
 from hostel.sms import send_sms
 
@@ -25,16 +23,6 @@ def reminder_for(today):
         return RentReminder.BEFORE_DUE, upcoming.replace(day=1), upcoming
 
     return None
-
-
-def tenant_balance(tenant):
-    # Same rule as the Balances page: room rent minus everything paid.
-    rent_due = tenant.room.rent_amount if tenant.room else Decimal("0")
-    paid = (
-        Payment.objects.filter(tenant=tenant).aggregate(total=Sum("amount"))["total"]
-        or Decimal("0")
-    )
-    return rent_due - paid
 
 
 def build_message(tenant, balance, due_date, kind):
@@ -83,7 +71,7 @@ class Command(BaseCommand):
         sent = skipped = failed = 0
 
         for tenant in Tenant.objects.filter(room__isnull=False).select_related("room"):
-            balance = tenant_balance(tenant)
+            balance = tenant.balance()
             if balance <= 0:
                 continue
 

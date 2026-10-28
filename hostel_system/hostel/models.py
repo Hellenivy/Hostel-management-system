@@ -1,4 +1,8 @@
+from decimal import Decimal
+
+from django.conf import settings
 from django.db import models
+from django.db.models import Sum
 
 
 class Room(models.Model):
@@ -16,9 +20,23 @@ class Tenant(models.Model):
     id_number = models.CharField(max_length=20)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     move_in_date = models.DateField()
+    # Login for the tenant portal; empty until an admin creates one.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tenant_profile",
+    )
 
     def __str__(self):
         return self.full_name
+
+    def balance(self):
+        # Room rent minus everything paid, as shown on the Balances page.
+        rent_due = self.room.rent_amount if self.room else Decimal("0")
+        paid = self.payment_set.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        return rent_due - paid
 
 
 class Payment(models.Model):

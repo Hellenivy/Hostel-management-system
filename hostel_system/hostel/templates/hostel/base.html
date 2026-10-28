@@ -602,6 +602,7 @@
         <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
         <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14a6 6 0 0 1 3.5 6"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3"/><path d="M17 6l3 3"/><path d="M15 8l2 2"/></symbol>
         <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
     </svg>
 
@@ -609,11 +610,12 @@
     {% with name=request.resolver_match.url_name %}
     <div class="app">
         <aside class="sidebar">
-            <a class="brand" href="{% url 'dashboard' %}">
+            <a class="brand" href="{% if request.user.is_staff %}{% url 'dashboard' %}{% else %}{% url 'my_account' %}{% endif %}">
                 <span class="brand-mark"><svg class="icon"><use href="#i-home"/></svg></span>
                 <span>Smart Hostel</span>
             </a>
 
+            {% if request.user.is_staff %}
             <div class="nav-label">Manage</div>
             <nav class="nav">
                 <a href="{% url 'dashboard' %}" class="{% if name == 'dashboard' or name == 'add_room' or name == 'add_tenant' or name == 'edit_tenant' %}active{% endif %}">
@@ -628,13 +630,30 @@
                 <a href="{% url 'complaints' %}" class="{% if name == 'complaints' or name == 'add_complaint' %}active{% endif %}">
                     <svg class="icon"><use href="#i-chat"/></svg> Complaints
                 </a>
+                <a href="{% url 'users' %}" class="{% if name == 'users' or name == 'add_admin' or name == 'add_tenant_account' %}active{% endif %}">
+                    <svg class="icon"><use href="#i-users"/></svg> Users
+                </a>
             </nav>
+            {% else %}
+            <div class="nav-label">My hostel</div>
+            <nav class="nav">
+                <a href="{% url 'my_account' %}" class="{% if name == 'my_account' %}active{% endif %}">
+                    <svg class="icon"><use href="#i-home"/></svg> My account
+                </a>
+                <a href="{% url 'complaints' %}" class="{% if name == 'complaints' or name == 'add_complaint' %}active{% endif %}">
+                    <svg class="icon"><use href="#i-chat"/></svg> Complaints
+                </a>
+            </nav>
+            {% endif %}
 
             <div class="sidebar-footer">
                 <div class="user">
                     <span class="avatar">{{ request.user.username|slice:":1"|upper }}</span>
                     <span class="user-name">{{ request.user.username }}</span>
                 </div>
+                <a href="{% url 'change_password' %}" class="logout{% if name == 'change_password' or name == 'change_password_done' %} active{% endif %}">
+                    <svg class="icon"><use href="#i-key"/></svg><span>Change password</span>
+                </a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="logout">

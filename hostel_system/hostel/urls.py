@@ -1,7 +1,23 @@
-from django.urls import path
+from django.contrib.auth import views as auth_views
+from django.urls import path, reverse_lazy
 from . import views
 
 urlpatterns = [
+    path(
+        'account/password/',
+        auth_views.PasswordChangeView.as_view(
+            template_name='hostel/password_change.html',
+            success_url=reverse_lazy('change_password_done'),
+        ),
+        name='change_password',
+    ),
+    path(
+        'account/password/done/',
+        auth_views.PasswordChangeDoneView.as_view(
+            template_name='hostel/password_change_done.html',
+        ),
+        name='change_password_done',
+    ),
     path('', views.dashboard, name='dashboard'),
     path('payments/', views.payments, name='payments'),
     path('payments/add/', views.add_payment, name='add_payment'),
@@ -12,6 +28,12 @@ urlpatterns = [
     path('complaints/', views.complaints, name='complaints'),
     path('complaints/add/', views.add_complaint, name='add_complaint'),
     path('complaints/<int:complaint_id>/resolve/', views.resolve_complaint, name='resolve_complaint'),
+    path('users/', views.users, name='users'),
+    path('users/add-admin/', views.add_admin, name='add_admin'),
+    path('users/add-tenant-login/', views.add_tenant_account, name='add_tenant_account'),
+    path('users/<int:user_id>/toggle-active/', views.toggle_user_active, name='toggle_user_active'),
+    path('users/<int:user_id>/set-password/', views.set_user_password, name='set_user_password'),
+    path('my/', views.my_account, name='my_account'),
     path('mpesa/callback/<str:token>/', views.mpesa_callback, name='mpesa_callback'),
     path('mpesa/request/<int:tenant_id>/', views.request_mpesa_payment, name='request_mpesa_payment'),
 ]
