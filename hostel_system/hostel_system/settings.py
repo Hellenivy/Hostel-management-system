@@ -105,7 +105,7 @@ MPESA_PASSKEY = os.getenv("MPESA_PASSKEY", "")
 # Secret appended to MPESA_CALLBACK_URL; callbacks without it are rejected.
 MPESA_CALLBACK_TOKEN = os.getenv("MPESA_CALLBACK_TOKEN", "")
 
-# Africa's Talking SMS. Use AT_USERNAME=sandbox while testing.
+# Africa's Talking SMS.Use AT_USERNAME=sandbox while testing.
 AT_USERNAME = os.getenv("AT_USERNAME", "sandbox")
 AT_API_KEY = os.getenv("AT_API_KEY", "")
 AT_SENDER_ID = os.getenv("AT_SENDER_ID", "")
