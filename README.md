@@ -69,7 +69,7 @@ The system includes an M-Pesa STK Push integration using the Safaricom Daraja sa
 Register or sign in to the Safaricom Daraja developer portal and create or access a sandbox application for Lipa Na M-Pesa Online (STK Push).
 
 ### 2. Configure Environment Variables
-Create a `.env` file in the Django project directory where `manage.py` is located. Add your own configuration values:
+Create a `.env` file in the Django project directory where `settings.py` is located. Add your own configuration values:
 
 ```env
 MPESA_CONSUMER_KEY=your_consumer_key
