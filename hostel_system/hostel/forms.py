@@ -25,7 +25,7 @@ class TenantForm(forms.ModelForm):
     def clean_room(self):
         room = self.cleaned_data.get('room')
         if room:
-            current = Tenant.objects.filter(room=room).count()
+            current = Tenant.objects.filter(room=room).exclude(pk=self.instance.pk).count()
             if current >= room.capacity:
                 raise forms.ValidationError("This room is already full.")
         return room

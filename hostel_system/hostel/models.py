@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 from django.db.models import Sum
+from django.utils import timezone
 
 
 class Room(models.Model):
@@ -32,9 +33,21 @@ class Tenant(models.Model):
     def __str__(self):
         return self.full_name
 
+    def months_billed(self):
+        # Rent is billed monthly, starting from the move-in month.
+        today = timezone.localdate()
+        if self.room is None or self.move_in_date > today:
+            return 0
+        return (
+            (today.year - self.move_in_date.year) * 12
+            + (today.month - self.move_in_date.month)
+            + 1
+        )
+
     def balance(self):
-        # Room rent minus everything paid, as shown on the Balances page.
-        rent_due = self.room.rent_amount if self.room else Decimal("0")
+        # Rent billed so far minus everything paid, as shown on the Balances page.
+        monthly_rent = self.room.rent_amount if self.room else Decimal("0")
+        rent_due = monthly_rent * self.months_billed()
         paid = self.payment_set.aggregate(total=Sum("amount"))["total"] or Decimal("0")
         return rent_due - paid
 
@@ -108,4 +121,4 @@ class Complaint(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.tenant.full_name} - {self.status}"  
+        return f"{self.tenant.full_name} - {self.status}"

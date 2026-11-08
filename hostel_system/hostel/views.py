@@ -32,6 +32,38 @@ logger = logging.getLogger(__name__)
 # older than this no longer hold back the tenant's balance.
 STK_PENDING_TIMEOUT = timedelta(minutes=3)
 
+
+def rent_summary(tenant):
+    """Rent is billed monthly, starting from the tenant's move-in month."""
+    today = timezone.localdate()
+
+    if tenant.room is None or tenant.move_in_date > today:
+        monthly_rent = Decimal("0.00")
+        months_billed = 0
+    else:
+        monthly_rent = tenant.room.rent_amount
+        months_billed = (
+            (today.year - tenant.move_in_date.year) * 12
+            + (today.month - tenant.move_in_date.month)
+            + 1
+        )
+
+    rent_due = monthly_rent * months_billed
+
+    total_paid = sum(
+        Payment.objects.filter(tenant=tenant).values_list("amount", flat=True),
+        Decimal("0.00"),
+    )
+
+    return {
+        "monthly_rent": monthly_rent,
+        "months_billed": months_billed,
+        "rent_due": rent_due,
+        "total_paid": total_paid,
+        "balance": rent_due - total_paid,
+    }
+
+
 @staff_required
 def dashboard(request):
     rooms = Room.objects.all()
@@ -138,20 +170,12 @@ def edit_tenant(request, tenant_id):
 
 @staff_required
 def balances(request):
-    tenants = Tenant.objects.all()
+    tenants = Tenant.objects.select_related("room")
     balance_list = []
 
     for tenant in tenants:
-        if tenant.room:
-            rent_due = tenant.room.rent_amount
-        else:
-            rent_due = 0
-
-        total_paid = 0
-        for p in Payment.objects.filter(tenant=tenant):
-            total_paid = total_paid + p.amount
-
-        balance = rent_due - total_paid
+        summary = rent_summary(tenant)
+        balance = summary["balance"]
 
         if balance < 0:
             status = "Overpaid"
@@ -162,8 +186,8 @@ def balances(request):
 
         balance_list.append({
             "tenant": tenant,
-            "rent_due": rent_due,
-            "total_paid": total_paid,
+            "rent_due": summary["rent_due"],
+            "total_paid": summary["total_paid"],
             "balance": balance,
             "status": status,
         })
@@ -441,18 +465,9 @@ def request_mpesa_payment(request, tenant_id):
         )
         return redirect("balances")
 
-    rent_due = (
-        tenant.room.rent_amount
-        if tenant.room
-        else Decimal("0.00")
-    )
-
-    total_paid = sum(
-        Payment.objects.filter(tenant=tenant).values_list(
-            "amount", flat=True
-        ),
-        Decimal("0.00"),
-    )
+    summary = rent_summary(tenant)
+    rent_due = summary["rent_due"]
+    total_paid = summary["total_paid"]
 
     pending_total = sum(
         MpesaTransaction.objects.filter(

@@ -1,4 +1,3 @@
-
 import requests
 import base64
 from datetime import datetime
@@ -67,6 +66,11 @@ def build_callback_url():
 
 
 def initiate_stk_push(phone, amount, tenant_id):
+    # Clean the phone number into the 2547XXXXXXXX format Daraja needs.
+    phone = format_phone_number(phone)
+    if phone is None:
+        raise ValueError("Invalid phone number")
+
     callback_url = build_callback_url()
     access_token = get_access_token()
 
