@@ -31,9 +31,9 @@
         </div>
         <div class="card stat">
             <div class="stat-label"><svg class="icon"><use href="#i-chart"/></svg> Occupancy</div>
-            <div class="stat-value">{{ stats.occupancy_pct }}%</div>
+            <div class="stat-value">{{ stats.occupancy_pct|default:0 }}%</div>
             <div class="meter" style="margin-top: 10px;">
-                <div class="meter-track"><div class="meter-fill" style="width: {{ stats.occupancy_pct }}%"></div></div>
+                <div class="meter-track"><div class="meter-fill" style="width: {{ stats.occupancy_pct|default:0 }}%;"></div></div>
             </div>
         </div>
         <div class="card stat">

@@ -1,1 +1,309 @@
-from django.test import TestCase  # noqa: F401
+from django.test import TestCase  
+import json
+from datetime import date
+from decimal import Decimal
+from io import StringIO
+from unittest.mock import patch
+
+from django.core.management import call_command
+from django.test import RequestFactory, TestCase, override_settings
+
+from .forms import PaymentForm, TenantForm
+from .models import MpesaTransaction, Payment, Room, Tenant
+from .mpesa import format_phone_number
+from .views import mpesa_callback, rent_summary
+
+TODAY = date(2026, 11, 9)
+
+
+def make_room(number="101", rent="5000", capacity=1):
+    return Room.objects.create(
+        room_number=number, rent_amount=Decimal(rent), capacity=capacity
+    )
+
+
+def make_tenant(room, move_in=date(2026, 10, 15), name="Anna Wanjiku",
+                phone="0712345678", id_number="12345678"):
+    return Tenant.objects.create(
+        full_name=name, phone=phone, id_number=id_number,
+        room=room, move_in_date=move_in,
+    )
+
+
+def pay(tenant, amount):
+    return Payment.objects.create(tenant=tenant, amount=Decimal(str(amount)))
+
+
+# ---------- Phone number formatting (STK Push and SMS) ----------
+
+class PhoneFormatTests(TestCase):
+    def test_zero_prefix_becomes_254(self):
+        self.assertEqual(format_phone_number("0712345678"), "254712345678")
+
+    def test_plus_and_spaces_are_removed(self):
+        self.assertEqual(format_phone_number("+254 712 345 678"), "254712345678")
+
+    def test_nine_digit_number_gets_254(self):
+        self.assertEqual(format_phone_number("712345678"), "254712345678")
+
+    def test_01_numbers_are_accepted(self):
+        self.assertEqual(format_phone_number("0110123456"), "254110123456")
+
+    def test_invalid_numbers_return_none(self):
+        for bad in ["12345", "", "0812345678", "abc"]:
+            self.assertIsNone(format_phone_number(bad), bad)
+
+
+# ---------- Monthly rent balance ----------
+
+@patch("django.utils.timezone.localdate", return_value=TODAY)
+class MonthlyBalanceTests(TestCase):
+    def setUp(self):
+        self.room = make_room(rent="5000")
+
+    def test_two_months_billed_when_moved_in_last_month(self, _):
+        tenant = make_tenant(self.room, move_in=date(2026, 10, 15))
+        self.assertEqual(tenant.months_billed(), 2)
+        self.assertEqual(tenant.balance(), Decimal("10000"))
+
+    def test_one_month_billed_when_moved_in_this_month(self, _):
+        tenant = make_tenant(self.room, move_in=date(2026, 11, 1))
+        self.assertEqual(tenant.balance(), Decimal("5000"))
+
+    def test_payment_reduces_balance(self, _):
+        tenant = make_tenant(self.room)
+        pay(tenant, 5000)
+        self.assertEqual(tenant.balance(), Decimal("5000"))
+
+    def test_paid_up_balance_is_zero(self, _):
+        tenant = make_tenant(self.room)
+        pay(tenant, 10000)
+        self.assertEqual(tenant.balance(), Decimal("0"))
+
+    def test_overpayment_gives_negative_balance(self, _):
+        tenant = make_tenant(self.room)
+        pay(tenant, 12000)
+        self.assertEqual(tenant.balance(), Decimal("-2000"))
+
+    def test_future_move_in_is_not_billed_yet(self, _):
+        tenant = make_tenant(self.room, move_in=date(2026, 12, 1))
+        self.assertEqual(tenant.balance(), Decimal("0"))
+
+    def test_tenant_without_room_owes_nothing(self, _):
+        tenant = make_tenant(self.room)
+        tenant.room = None
+        tenant.save()
+        self.assertEqual(tenant.balance(), Decimal("0"))
+
+    def test_views_and_model_give_the_same_balance(self, _):
+        tenant = make_tenant(self.room)
+        pay(tenant, 3000)
+        self.assertEqual(rent_summary(tenant)["balance"], tenant.balance())
+
+
+# ---------- Tenant form: capacity, ID number, phone ----------
+
+class TenantFormTests(TestCase):
+    def setUp(self):
+        self.room = make_room(capacity=1)
+
+    def data(self, **overrides):
+        base = {
+            "full_name": "New Tenant",
+            "phone": "0722000111",
+            "id_number": "99999999",
+            "room": self.room.pk,
+            "move_in_date": "2026-11-01",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_tenant_is_accepted(self):
+        self.assertTrue(TenantForm(self.data()).is_valid())
+
+    def test_full_room_is_rejected(self):
+        make_tenant(self.room)
+        form = TenantForm(self.data())
+        self.assertFalse(form.is_valid())
+        self.assertIn("room", form.errors)
+
+    def test_editing_a_tenant_in_a_full_room_is_allowed(self):
+        tenant = make_tenant(self.room)
+        form = TenantForm(
+            self.data(full_name="Renamed", id_number=tenant.id_number),
+            instance=tenant,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_duplicate_id_number_is_rejected(self):
+        other_room = make_room("102")
+        make_tenant(other_room, id_number="12345678")
+        form = TenantForm(self.data(id_number="12345678"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("id_number", form.errors)
+
+    def test_invalid_phone_is_rejected(self):
+        form = TenantForm(self.data(phone="12345"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("phone", form.errors)
+
+
+# ---------- Manual payment form ----------
+
+class PaymentFormTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant(make_room())
+
+    def data(self, **overrides):
+        base = {"tenant": self.tenant.pk, "amount": "1000", "mpesa_code": ""}
+        base.update(overrides)
+        return base
+
+    def test_valid_payment_is_accepted(self):
+        self.assertTrue(PaymentForm(self.data()).is_valid())
+
+    def test_zero_amount_is_rejected(self):
+        self.assertFalse(PaymentForm(self.data(amount="0")).is_valid())
+
+    def test_negative_amount_is_rejected(self):
+        self.assertFalse(PaymentForm(self.data(amount="-500")).is_valid())
+
+    def test_mpesa_code_is_saved_in_capitals(self):
+        form = PaymentForm(self.data(mpesa_code=" abc123xyz "))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["mpesa_code"], "ABC123XYZ")
+
+    def test_duplicate_mpesa_code_is_rejected(self):
+        Payment.objects.create(
+            tenant=self.tenant, amount=Decimal("1000"), mpesa_code="ABC123XYZ"
+        )
+        form = PaymentForm(self.data(mpesa_code="abc123xyz"))
+        self.assertFalse(form.is_valid())
+
+
+# ---------- M-Pesa callback ----------
+
+@override_settings(MPESA_CALLBACK_TOKEN="test-token")
+class MpesaCallbackTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.tenant = make_tenant(make_room())
+        self.txn = MpesaTransaction.objects.create(
+            tenant=self.tenant,
+            amount=Decimal("5000"),
+            checkout_request_id="ws_CO_TEST_1",
+            status="Pending",
+        )
+
+    def post(self, payload, token="test-token"):
+        request = self.factory.post(
+            f"/mpesa/callback/{token}/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        return mpesa_callback(request, token)
+
+    def success_payload(self, amount=5000, receipt="QWE123RTY4"):
+        return {"Body": {"stkCallback": {
+            "CheckoutRequestID": "ws_CO_TEST_1",
+            "ResultCode": 0,
+            "CallbackMetadata": {"Item": [
+                {"Name": "Amount", "Value": amount},
+                {"Name": "MpesaReceiptNumber", "Value": receipt},
+            ]},
+        }}}
+
+    def test_wrong_token_is_rejected(self):
+        from django.http import Http404
+        with self.assertRaises(Http404):
+            self.post(self.success_payload(), token="wrong")
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_successful_callback_records_one_payment(self):
+        self.post(self.success_payload())
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.status, "Success")
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Payment.objects.first().mpesa_code, "QWE123RTY4")
+
+    def test_repeated_callback_does_not_duplicate_payment(self):
+        self.post(self.success_payload())
+        self.post(self.success_payload())
+        self.assertEqual(Payment.objects.count(), 1)
+
+    def test_cancelled_payment_is_marked_failed(self):
+        payload = {"Body": {"stkCallback": {
+            "CheckoutRequestID": "ws_CO_TEST_1", "ResultCode": 1032,
+        }}}
+        self.post(payload)
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.status, "Failed")
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_amount_mismatch_records_no_payment(self):
+        self.post(self.success_payload(amount=4000))
+        self.txn.refresh_from_db()
+        self.assertEqual(self.txn.status, "Pending")
+        self.assertEqual(Payment.objects.count(), 0)
+
+
+# ---------- Rent-due SMS reminders ----------
+
+@override_settings(
+    RENT_DUE_DAY=1,
+    RENT_REMINDER_DAYS_BEFORE=3,
+    MPESA_SHORTCODE="174379",
+)
+class RentReminderTests(TestCase):
+    def run_command(self, run_date):
+        out = StringIO()
+        call_command(
+            "send_rent_reminders", dry_run=True, date=run_date,
+            stdout=out, stderr=StringIO(),
+        )
+        return out.getvalue()
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 11, 28))
+    def test_before_due_reminder_includes_next_months_rent(self, _):
+        # Paid up for November, so the old balance is 0 but December is coming.
+        room = make_room(rent="5000")
+        tenant = make_tenant(room, move_in=date(2026, 11, 1))
+        pay(tenant, 5000)
+
+        output = self.run_command("2026-11-28")
+
+        self.assertIn("KES 5,000", output)
+        self.assertIn("would send 1", output)
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 11, 28))
+    def test_arrears_are_added_to_next_months_rent(self, _):
+        room = make_room(rent="5000")
+        make_tenant(room, move_in=date(2026, 11, 1))  # owes November
+
+        output = self.run_command("2026-11-28")
+
+        self.assertIn("KES 10,000", output)
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 12, 1))
+    def test_on_due_reminder_uses_current_balance(self, _):
+        room = make_room(rent="5000")
+        make_tenant(room, move_in=date(2026, 11, 1))  # owes Nov + Dec
+
+        output = self.run_command("2026-12-01")
+
+        self.assertIn("KES 10,000", output)
+        self.assertIn("is due today", output)
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 11, 28))
+    def test_tenant_with_invalid_phone_is_skipped(self, _):
+        room = make_room(rent="5000")
+        tenant = make_tenant(room, move_in=date(2026, 11, 1))
+        Tenant.objects.filter(pk=tenant.pk).update(phone="12345")
+
+        output = self.run_command("2026-11-28")
+
+        self.assertIn("would send 0", output)
+
+    def test_no_reminder_on_other_days(self):
+        output = self.run_command("2026-11-15")
+        self.assertIn("no reminders scheduled", output)
