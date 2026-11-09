@@ -21,6 +21,9 @@ class Tenant(models.Model):
     id_number = models.CharField(max_length=20)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     move_in_date = models.DateField()
+    # Set when the tenant leaves; the room bed is freed but the record and
+    # payment history are kept.
+    move_out_date = models.DateField(null=True, blank=True)
     # Login for the tenant portal; empty until an admin creates one.
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -34,13 +37,17 @@ class Tenant(models.Model):
         return self.full_name
 
     def months_billed(self):
-        # Rent is billed monthly, starting from the move-in month.
+        # Rent is billed monthly, from the move-in month to the move-out
+        # month (or this month if the tenant is still living here).
         today = timezone.localdate()
-        if self.room is None or self.move_in_date > today:
+        end = today
+        if self.move_out_date and self.move_out_date < today:
+            end = self.move_out_date
+        if self.room is None or self.move_in_date > end:
             return 0
         return (
-            (today.year - self.move_in_date.year) * 12
-            + (today.month - self.move_in_date.month)
+            (end.year - self.move_in_date.year) * 12
+            + (end.month - self.move_in_date.month)
             + 1
         )
 

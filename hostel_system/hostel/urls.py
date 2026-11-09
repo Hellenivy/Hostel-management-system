@@ -24,6 +24,7 @@ urlpatterns = [
     path('rooms/add/', views.add_room, name='add_room'),
     path('tenants/add/', views.add_tenant, name='add_tenant'),
     path('tenants/<int:tenant_id>/edit/', views.edit_tenant, name='edit_tenant'),
+    path('tenants/<int:tenant_id>/move-out/', views.move_out_tenant, name='move_out_tenant'),
     path('balances/', views.balances, name='balances'),
     path('complaints/', views.complaints, name='complaints'),
     path('complaints/add/', views.add_complaint, name='add_complaint'),

@@ -70,7 +70,9 @@ class Command(BaseCommand):
 
         sent = skipped = failed = 0
 
-        for tenant in Tenant.objects.filter(room__isnull=False).select_related("room"):
+        for tenant in Tenant.objects.filter(
+            room__isnull=False, move_out_date__isnull=True
+        ).select_related("room"):
             balance = tenant.balance()
 
             # A "before due" reminder goes out in the month before the rent is

@@ -1,4 +1,3 @@
-from django.test import TestCase  
 import json
 from datetime import date
 from decimal import Decimal
@@ -307,3 +306,75 @@ class RentReminderTests(TestCase):
     def test_no_reminder_on_other_days(self):
         output = self.run_command("2026-11-15")
         self.assertIn("no reminders scheduled", output)
+
+
+# ---------- Tenant move-out ----------
+
+@patch("django.utils.timezone.localdate", return_value=TODAY)
+class MoveOutTests(TestCase):
+    def setUp(self):
+        self.room = make_room(rent="5000", capacity=1)
+
+    def test_rent_stops_after_move_out_month(self, _):
+        # Lived here August and September only.
+        tenant = make_tenant(self.room, move_in=date(2026, 8, 1))
+        tenant.move_out_date = date(2026, 9, 15)
+        tenant.save()
+        self.assertEqual(tenant.months_billed(), 2)
+        self.assertEqual(tenant.balance(), Decimal("10000"))
+
+    def test_unpaid_balance_is_kept_after_move_out(self, _):
+        tenant = make_tenant(self.room, move_in=date(2026, 8, 1))
+        tenant.move_out_date = date(2026, 9, 15)
+        tenant.save()
+        pay(tenant, 4000)
+        self.assertEqual(tenant.balance(), Decimal("6000"))
+
+    def test_moved_out_tenant_frees_the_room(self, _):
+        old = make_tenant(self.room, move_in=date(2026, 8, 1))
+        old.move_out_date = date(2026, 10, 31)
+        old.save()
+        form = TenantForm({
+            "full_name": "New Tenant", "phone": "0722000111",
+            "id_number": "99999999", "room": self.room.pk,
+            "move_in_date": "2026-11-01",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_move_out_button_sets_the_date(self, _):
+        from django.contrib.auth import get_user_model
+        admin = get_user_model().objects.create_user(
+            "admin1", password="pass12345", is_staff=True
+        )
+        tenant = make_tenant(self.room)
+        self.client.force_login(admin)
+
+        response = self.client.post(f"/tenants/{tenant.id}/move-out/")
+
+        self.assertEqual(response.status_code, 302)
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.move_out_date, TODAY)
+
+    def test_move_out_needs_post(self, _):
+        from django.contrib.auth import get_user_model
+        admin = get_user_model().objects.create_user(
+            "admin2", password="pass12345", is_staff=True
+        )
+        tenant = make_tenant(self.room)
+        self.client.force_login(admin)
+
+        response = self.client.get(f"/tenants/{tenant.id}/move-out/")
+
+        self.assertEqual(response.status_code, 405)
+        tenant.refresh_from_db()
+        self.assertIsNone(tenant.move_out_date)
+
+    def test_reminders_skip_moved_out_tenants(self, _):
+        tenant = make_tenant(self.room, move_in=date(2026, 8, 1))
+        tenant.move_out_date = date(2026, 9, 15)
+        tenant.save()
+        with patch("django.utils.timezone.localdate", return_value=date(2026, 11, 28)):
+            out = StringIO()
+            call_command("send_rent_reminders", dry_run=True, date="2026-11-28",
+                         stdout=out, stderr=StringIO())
+        self.assertIn("would send 0", out.getvalue())

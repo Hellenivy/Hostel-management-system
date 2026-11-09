@@ -35,18 +35,8 @@ STK_PENDING_TIMEOUT = timedelta(minutes=3)
 
 def rent_summary(tenant):
     """Rent is billed monthly, starting from the tenant's move-in month."""
-    today = timezone.localdate()
-
-    if tenant.room is None or tenant.move_in_date > today:
-        monthly_rent = Decimal("0.00")
-        months_billed = 0
-    else:
-        monthly_rent = tenant.room.rent_amount
-        months_billed = (
-            (today.year - tenant.move_in_date.year) * 12
-            + (today.month - tenant.move_in_date.month)
-            + 1
-        )
+    monthly_rent = tenant.room.rent_amount if tenant.room else Decimal("0.00")
+    months_billed = tenant.months_billed()
 
     rent_due = monthly_rent * months_billed
 
@@ -70,7 +60,7 @@ def dashboard(request):
     room_list = []
 
     for room in rooms:
-        tenants = Tenant.objects.filter(room=room)
+        tenants = Tenant.objects.filter(room=room, move_out_date__isnull=True)
         count = tenants.count()
 
         if count == 0:
@@ -166,6 +156,23 @@ def edit_tenant(request, tenant_id):
         form = TenantForm(instance=tenant)
     return render(request, "hostel/edit_tenant.html", {"form": form, "tenant": tenant})
 
+
+@staff_required
+@require_POST
+def move_out_tenant(request, tenant_id):
+    tenant = get_object_or_404(Tenant, id=tenant_id)
+
+    if tenant.move_out_date:
+        messages.error(request, f"{tenant.full_name} has already moved out.")
+    else:
+        tenant.move_out_date = timezone.localdate()
+        tenant.save(update_fields=["move_out_date"])
+        messages.success(
+            request,
+            f"{tenant.full_name} has been marked as moved out. "
+            "Their payment history and any balance are kept.",
+        )
+    return redirect("dashboard")
 
 
 @staff_required

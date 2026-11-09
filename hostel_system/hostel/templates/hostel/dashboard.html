@@ -75,6 +75,11 @@
                                     <span class="avatar">{{ tenant.full_name|slice:":1"|upper }}</span>
                                     <span class="person-name">{{ tenant.full_name }}</span>
                                     <a class="edit-link" href="{% url 'edit_tenant' tenant.id %}">Edit</a>
+                                    <form method="post" action="{% url 'move_out_tenant' tenant.id %}" style="display:inline"
+                                          onsubmit="return confirm('Mark {{ tenant.full_name|escapejs }} as moved out?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit">Move out</button>
+                                    </form>
                                 </div>
                             {% empty %}
                                 <span class="subtle">No tenants</span>
