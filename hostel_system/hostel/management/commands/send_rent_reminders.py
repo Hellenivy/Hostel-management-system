@@ -72,6 +72,16 @@ class Command(BaseCommand):
 
         for tenant in Tenant.objects.filter(room__isnull=False).select_related("room"):
             balance = tenant.balance()
+
+            # A "before due" reminder goes out in the month before the rent is
+            # billed, so the coming month's rent is not in the balance yet.
+            if (
+                kind == RentReminder.BEFORE_DUE
+                and due_date.month != today.month
+                and tenant.move_in_date <= due_date
+            ):
+                balance += tenant.room.rent_amount
+
             if balance <= 0:
                 continue
 
