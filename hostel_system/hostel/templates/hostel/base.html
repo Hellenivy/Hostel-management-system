@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ---------- Design tokens ---------- */
+    
         :root {
             --bg: #fafafa;
             --surface: #ffffff;
@@ -19,7 +19,6 @@
             --text-muted: #6b6b73;
             --text-subtle: #a1a1aa;
 
-            /* White surfaces with green as the accent. */
             --primary: #059669;
             --primary-hover: #047857;
 
@@ -50,7 +49,7 @@
             --sidebar-width: 240px;
         }
 
-        /* ---------- Base ---------- */
+        /* Base */
         *, *::before, *::after { box-sizing: border-box; }
 
         html { -webkit-text-size-adjust: 100%; }
@@ -84,7 +83,7 @@
             stroke-linejoin: round;
         }
 
-        /* ---------- App shell ---------- */
+        /* App */
         .app {
             display: grid;
             grid-template-columns: var(--sidebar-width) 1fr;
@@ -614,6 +613,9 @@
                 <span class="brand-mark"><svg class="icon"><use href="#i-bed"/></svg></span>
                 <span>Smart Hostel</span>
             </a>
+                <a href="{% url 'reports' %}" class="{% if name == 'reports' or name == 'report_detail' %}active{% endif %}">
+                    <svg class="icon"><use href="#i-chart"/></svg> Reports
+                </a>
 
             {% if request.user.is_staff %}
             <div class="nav-label">Manage</div>

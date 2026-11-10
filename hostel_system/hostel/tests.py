@@ -464,3 +464,110 @@ class DeleteTests(TestCase):
             self.assertEqual(response.status_code, 200, url)
         self.assertContains(self.client.get("/"), "/rooms/")
         self.assertContains(self.client.get("/payments/"), "/delete/")
+
+        
+
+# Reports
+
+@patch("django.utils.timezone.localdate", return_value=TODAY)
+class ReportTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.User = get_user_model()
+        admin = self.User.objects.create_user("boss", password="pass12345", is_staff=True)
+        self.client.force_login(admin)
+
+        self.room = make_room(rent="5000", capacity=2)
+        # Anna owes 5,000 (two months billed, one paid).
+        self.anna = make_tenant(self.room, name="Anna Wanjiku")
+        pay(self.anna, 5000)
+        # Brian is paid up.
+        self.brian = make_tenant(
+            self.room, move_in=date(2026, 11, 1), name="Brian Otieno",
+            phone="0722000111", id_number="22222222",
+        )
+        pay(self.brian, 5000)
+
+    def test_every_report_page_loads(self, _):
+        for slug in ["rent-per-month", "arrears", "occupancy", "payments", "complaints"]:
+            response = self.client.get(f"/reports/{slug}/")
+            self.assertEqual(response.status_code, 200, slug)
+        self.assertEqual(self.client.get("/reports/").status_code, 200)
+
+    def test_unknown_report_is_404(self, _):
+        self.assertEqual(self.client.get("/reports/nonsense/").status_code, 404)
+
+    def test_arrears_lists_only_tenants_who_owe(self, _):
+        response = self.client.get("/reports/arrears/")
+        self.assertContains(response, "Anna Wanjiku")
+        self.assertNotContains(response, "Brian Otieno")
+
+    def test_arrears_csv_download(self, _):
+        response = self.client.get("/reports/arrears/?format=csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn("attachment", response["Content-Disposition"])
+        text = response.content.decode("utf-8-sig")
+        self.assertIn("Tenant,Phone,Room", text)
+        self.assertIn("Anna Wanjiku", text)
+        self.assertIn("5,000.00", text)
+        self.assertNotIn("Brian Otieno", text)
+
+    def test_every_report_downloads_as_a_real_pdf(self, _):
+        for slug in ["rent-per-month", "arrears", "occupancy", "payments", "complaints"]:
+            response = self.client.get(f"/reports/{slug}/?format=pdf")
+            self.assertEqual(response.status_code, 200, slug)
+            self.assertEqual(response["Content-Type"], "application/pdf")
+            self.assertTrue(response.content.startswith(b"%PDF"), slug)
+
+    def test_occupancy_report_counts_beds(self, _):
+        response = self.client.get("/reports/occupancy/")
+        self.assertContains(response, "2 of 2 (100%)")
+
+    def test_moved_out_tenants_do_not_count_as_occupied(self, _):
+        self.brian.move_out_date = date(2026, 11, 5)
+        self.brian.save()
+        response = self.client.get("/reports/occupancy/")
+        self.assertContains(response, "1 of 2 (50%)")
+
+    def test_payments_report_total(self, _):
+        response = self.client.get("/reports/payments/")
+        self.assertContains(response, "10,000.00")
+
+    def test_payments_date_range_filters_out_everything(self, _):
+        response = self.client.get("/reports/payments/?from=2000-01-01&to=2000-01-31")
+        self.assertContains(response, "No data for this report")
+
+    def test_invalid_date_is_ignored_with_a_message(self, _):
+        response = self.client.get("/reports/payments/?from=not-a-date")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "not a valid date")
+
+    def test_rent_per_month_groups_payments(self, _):
+        response = self.client.get("/reports/rent-per-month/")
+        self.assertContains(response, "10,000.00")
+
+    def test_complaints_report_filters_by_status(self, _):
+        from .models import Complaint
+        Complaint.objects.create(tenant=self.anna, description="Broken tap", status="Open")
+        Complaint.objects.create(tenant=self.anna, description="Old lock", status="Resolved")
+        response = self.client.get("/reports/complaints/?status=open")
+        self.assertContains(response, "Broken tap")
+        self.assertNotContains(response, "Old lock")
+
+    def test_csv_blocks_spreadsheet_formulas(self, _):
+        from .models import Complaint
+        Complaint.objects.create(
+            tenant=self.anna, description="=HYPERLINK(\"http://x\")", status="Open"
+        )
+        text = self.client.get("/reports/complaints/?format=csv").content.decode("utf-8-sig")
+        self.assertIn("'=HYPERLINK", text)
+
+    def test_tenants_cannot_open_reports(self, _):
+        login = self.User.objects.create_user("anna", password="pass12345")
+        self.anna.user = login
+        self.anna.save()
+        self.client.force_login(login)
+        response = self.client.get("/reports/arrears/")
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn(b"Anna", self.client.get("/reports/arrears/?format=csv").content)

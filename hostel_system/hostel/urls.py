@@ -1,7 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
-from . import views
-
+from . import reports, views
 urlpatterns = [
     path(
         'account/password/',
@@ -29,6 +28,8 @@ urlpatterns = [
     path('tenants/<int:tenant_id>/delete/', views.delete_tenant, name='delete_tenant'),
     path('payments/<int:payment_id>/delete/', views.delete_payment, name='delete_payment'),
     path('complaints/clear-resolved/', views.clear_resolved_complaints, name='clear_resolved_complaints'),
+    path('reports/', reports.reports_index, name='reports'),
+    path('reports/<slug:slug>/', reports.report_detail, name='report_detail'),
     path('balances/', views.balances, name='balances'),
     path('complaints/', views.complaints, name='complaints'),
     path('complaints/add/', views.add_complaint, name='add_complaint'),

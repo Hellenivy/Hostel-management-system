@@ -1,0 +1,45 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Reports</h1>
+            <p class="page-subtitle">View a report on screen, or download it as PDF or Excel (CSV).</p>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Report</th>
+                        <th>What it shows</th>
+                        <th>Open</th>
+                        <th>Download</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in report_list %}
+                    <tr>
+                        <td class="strong">{{ r.title }}</td>
+                        <td class="muted">{{ r.description }}</td>
+                        <td>
+                            <a class="btn btn-sm btn-secondary" href="{% url 'report_detail' r.slug %}">
+                                <svg class="icon"><use href="#i-chart"/></svg> View
+                            </a>
+                        </td>
+                        <td>
+                            <a class="edit-link" href="{% url 'report_detail' r.slug %}?format=pdf">PDF</a>
+                            &nbsp;
+                            <a class="edit-link" href="{% url 'report_detail' r.slug %}?format=csv">CSV</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}
