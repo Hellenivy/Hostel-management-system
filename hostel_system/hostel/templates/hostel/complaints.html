@@ -11,6 +11,13 @@
             </p>
         </div>
         <div class="header-actions">
+            {% if request.user.is_staff %}
+            <form method="post" action="{% url 'clear_resolved_complaints' %}" style="margin: 0;"
+                  onsubmit="return confirm('Permanently clear all resolved complaints?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-secondary">Clear resolved</button>
+            </form>
+            {% endif %}
             <a href="{% url 'add_complaint' %}" class="btn">
                 <svg class="icon"><use href="#i-plus"/></svg> Add complaint
             </a>

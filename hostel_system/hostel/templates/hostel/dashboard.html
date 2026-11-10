@@ -59,7 +59,14 @@
                 <tbody>
                     {% for item in room_list %}
                     <tr>
-                        <td class="strong">{{ item.room.room_number }}</td>
+                        <td class="strong">
+                            {{ item.room.room_number }}
+                            <form method="post" action="{% url 'delete_room' item.room.id %}" style="margin: 4px 0 0;"
+                                  onsubmit="return confirm('Delete room {{ item.room.room_number|escapejs }}? This cannot be undone.');">
+                                {% csrf_token %}
+                                <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#dc2626">Delete</button>
+                            </form>
+                        </td>
                         <td class="num">{{ item.room.rent_amount|floatformat:2 }}</td>
                         <td>
                             <div class="meter">
@@ -79,6 +86,11 @@
                                           onsubmit="return confirm('Mark {{ tenant.full_name|escapejs }} as moved out?');">
                                         {% csrf_token %}
                                         <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit">Move out</button>
+                                    </form>
+                                    <form method="post" action="{% url 'delete_tenant' tenant.id %}" style="display:inline"
+                                          onsubmit="return confirm('Delete {{ tenant.full_name|escapejs }} and ALL their payments and complaints? This cannot be undone.');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#dc2626">Delete</button>
                                     </form>
                                 </div>
                             {% empty %}

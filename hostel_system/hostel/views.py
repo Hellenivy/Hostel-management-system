@@ -551,8 +551,67 @@ def request_mpesa_payment(request, tenant_id):
 
     return redirect("balances")
 
+# Delete and clear (admin only)
 
-# ---------- User management (admins only) ----------
+@staff_required
+@require_POST
+def delete_room(request, room_id):
+    room = get_object_or_404(Room, id=room_id)
+
+    # Past tenants still point at their old roomand deleting it would wipe the room from their rent history.
+    if Tenant.objects.filter(room=room).exists():
+        messages.error(
+            request,
+            f"Room {room.room_number} still has tenants (current or past). "
+            "Move them to another room or delete them first.",
+        )
+    else:
+        number = room.room_number
+        room.delete()
+        messages.success(request, f"Room {number} deleted.")
+    return redirect("dashboard")
+
+
+@staff_required
+@require_POST
+def delete_tenant(request, tenant_id):
+    tenant = get_object_or_404(Tenant, id=tenant_id)
+    name = tenant.full_name
+    payment_count = tenant.payment_set.count()
+    login = tenant.user
+
+    tenant.delete()
+
+    #Tenant's login is useless without the tenant;never touch admin accounts.
+    if login is not None and not login.is_staff:
+        login.delete()
+
+    messages.success(
+        request,
+        f"{name} deleted, with {payment_count} payment record(s) and all their complaints.",
+    )
+    if request.POST.get("next") == "balances":
+        return redirect("balances")
+    return redirect("dashboard")
+
+
+@staff_required
+@require_POST
+def delete_payment(request, payment_id):
+    payment = get_object_or_404(Payment, id=payment_id)
+    payment.delete()
+    messages.success(request, "Payment deleted.")
+    return redirect("payments")
+
+
+@staff_required
+@require_POST
+def clear_resolved_complaints(request):
+    deleted, _ = Complaint.objects.filter(status="Resolved").delete()
+    messages.success(request, f"{deleted} resolved complaint(s) cleared.")
+    return redirect("complaints")
+
+# User management (admins only) 
 
 @staff_required
 def users(request):
@@ -654,7 +713,7 @@ def toggle_user_active(request, user_id):
     return redirect("users")
 
 
-# ---------- Tenant portal ----------
+# Tenant portal 
 
 def _own_tenant(request):
     # The only tenant record a tenant user may ever see.

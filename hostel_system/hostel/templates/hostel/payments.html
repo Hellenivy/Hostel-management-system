@@ -26,6 +26,7 @@
                         <th class="num">Amount (KES)</th>
                         <th>M-Pesa code</th>
                         <th>Date paid</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -47,6 +48,13 @@
                             {% endif %}
                         </td>
                         <td class="muted">{{ p.date_paid|date:"d M Y, H:i" }}</td>
+                        <td class="num">
+                            <form method="post" action="{% url 'delete_payment' p.id %}" style="margin: 0;"
+                                  onsubmit="return confirm('Delete this payment of KES {{ p.amount|floatformat:"2g" }} for {{ p.tenant.full_name|escapejs }}? The tenant\'s balance will go up by that amount.');">
+                                {% csrf_token %}
+                                <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#dc2626">Delete</button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

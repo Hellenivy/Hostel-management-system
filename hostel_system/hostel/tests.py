@@ -378,3 +378,89 @@ class MoveOutTests(TestCase):
             call_command("send_rent_reminders", dry_run=True, date="2026-11-28",
                          stdout=out, stderr=StringIO())
         self.assertIn("would send 0", out.getvalue())
+
+
+# Delete and clear
+
+class DeleteTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.User = get_user_model()
+        self.admin = self.User.objects.create_user(
+            "boss", password="pass12345", is_staff=True
+        )
+        self.client.force_login(self.admin)
+        self.room = make_room(capacity=2)
+
+    def test_empty_room_can_be_deleted(self):
+        response = self.client.post(f"/rooms/{self.room.id}/delete/")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Room.objects.filter(pk=self.room.pk).exists())
+
+    def test_room_with_tenants_is_not_deleted(self):
+        make_tenant(self.room)
+        self.client.post(f"/rooms/{self.room.id}/delete/")
+        self.assertTrue(Room.objects.filter(pk=self.room.pk).exists())
+
+    def test_room_with_only_past_tenants_is_not_deleted(self):
+        tenant = make_tenant(self.room)
+        tenant.move_out_date = date(2026, 9, 30)
+        tenant.save()
+        self.client.post(f"/rooms/{self.room.id}/delete/")
+        self.assertTrue(Room.objects.filter(pk=self.room.pk).exists())
+
+    def test_deleting_a_tenant_removes_their_payments(self):
+        tenant = make_tenant(self.room)
+        pay(tenant, 5000)
+        self.client.post(f"/tenants/{tenant.id}/delete/")
+        self.assertFalse(Tenant.objects.filter(pk=tenant.pk).exists())
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_deleting_a_tenant_removes_their_login_but_not_admins(self):
+        tenant = make_tenant(self.room)
+        login = self.User.objects.create_user("anna", password="pass12345")
+        tenant.user = login
+        tenant.save()
+        self.client.post(f"/tenants/{tenant.id}/delete/")
+        self.assertFalse(self.User.objects.filter(username="anna").exists())
+        self.assertTrue(self.User.objects.filter(username="boss").exists())
+
+    def test_payment_can_be_deleted(self):
+        tenant = make_tenant(self.room)
+        payment = pay(tenant, 5000)
+        self.client.post(f"/payments/{payment.id}/delete/")
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_clear_resolved_keeps_open_complaints(self):
+        from .models import Complaint
+        tenant = make_tenant(self.room)
+        Complaint.objects.create(tenant=tenant, description="Fixed", status="Resolved")
+        Complaint.objects.create(tenant=tenant, description="Leak", status="Open")
+        self.client.post("/complaints/clear-resolved/")
+        self.assertEqual(Complaint.objects.count(), 1)
+        self.assertEqual(Complaint.objects.first().status, "Open")
+
+    def test_delete_needs_post(self):
+        response = self.client.get(f"/rooms/{self.room.id}/delete/")
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Room.objects.filter(pk=self.room.pk).exists())
+
+    def test_tenants_cannot_delete_anything(self):
+        tenant = make_tenant(self.room)
+        login = self.User.objects.create_user("anna", password="pass12345")
+        tenant.user = login
+        tenant.save()
+        self.client.force_login(login)
+        self.client.post(f"/tenants/{tenant.id}/delete/")
+        self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
+
+    def test_pages_with_delete_buttons_load(self):
+        from .models import Complaint
+        tenant = make_tenant(self.room)
+        pay(tenant, 1000)
+        Complaint.objects.create(tenant=tenant, description="Leak", status="Open")
+        for url in ["/", "/payments/", "/complaints/", "/balances/"]:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200, url)
+        self.assertContains(self.client.get("/"), "/rooms/")
+        self.assertContains(self.client.get("/payments/"), "/delete/")
