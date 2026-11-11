@@ -55,7 +55,7 @@
                                 </div>
                                 <a class="edit-link" href="{% url 'edit_tenant' item.tenant.id %}">Edit</a>
     <form method="post" action="{% url 'delete_tenant' item.tenant.id %}" style="display:inline"
-      onsubmit="return confirm('Delete {{ item.tenant.full_name|escapejs }} and ALL their payments and complaints? This cannot be undone.');">
+      onsubmit="return confirm('Delete {{ item.tenant.full_name|escapejs }} and ALL their payments and complaints?This cannot be undone.');">
     {% csrf_token %}
     <input type="hidden" name="next" value="balances">
     <button type="submit" class="edit-link" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:#dc2626">Delete</button>

@@ -54,7 +54,7 @@ def _report(title, subtitle, headers, rows, summary, num_cols=(), weights=None,
     }
 
 
-# ---------- the five reports ----------
+# 5 reports 
 
 def rent_per_month(date_from=None, date_to=None, status="all"):
     months = (
@@ -203,7 +203,7 @@ def complaints_report(date_from=None, date_to=None, status="all"):
     ]
     open_count = sum(1 for row in rows if row[4] == "Open")
 
-    label = {"open": "Open complaints only", "resolved": "Resolved complaints only"}
+    label = {"open": "Open complaints only","resolved":"Resolved complaints only"}
     return _report(
         "Complaints",
         label.get(status, "All complaints"),
@@ -218,13 +218,13 @@ def complaints_report(date_from=None, date_to=None, status="all"):
 REPORTS = {
     "rent-per-month": {
         "title": "Rent collected per month",
-        "description": "How much rent came in each month, and how many payments.",
+        "description": "How much rent came in each month and how many payments made.",
         "build": rent_per_month,
         "filters": "dates",
     },
     "arrears": {
         "title": "Tenants who owe rent",
-        "description": "Everyone with an unpaid balance, biggest debt first.",
+        "description": "Everyone with an unpaid balance,biggest debt first.",
         "build": arrears,
         "filters": "",
     },
@@ -236,7 +236,7 @@ REPORTS = {
     },
     "payments": {
         "title": "Payments",
-        "description": "Every payment received, with M-Pesa codes. Pick a date range.",
+        "description": "Every payment received with M-Pesa codes.Pick a date range.",
         "build": payments_report,
         "filters": "dates",
     },
@@ -249,7 +249,7 @@ REPORTS = {
 }
 
 
-# ---------- downloads ----------
+# Downloads
 
 def _safe_cell(value):
     # Stop spreadsheet programs from running a cell that starts like a formula.
@@ -361,7 +361,7 @@ def to_pdf_response(report, slug):
     return response
 
 
-# ---------- views ----------
+# Views 
 
 def _parse_date(request, key):
     raw = request.GET.get(key, "").strip()
@@ -370,7 +370,7 @@ def _parse_date(request, key):
     try:
         return date.fromisoformat(raw)
     except ValueError:
-        messages.error(request, f"'{raw}' is not a valid date. Use the date picker.")
+        messages.error(request, f"'{raw}' is not a valid date.Use the date picker.")
         return None
 
 

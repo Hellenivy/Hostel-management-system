@@ -33,7 +33,7 @@ def pay(tenant, amount):
     return Payment.objects.create(tenant=tenant, amount=Decimal(str(amount)))
 
 
-# ---------- Phone number formatting (STK Push and SMS) ----------
+# Phone number formatting (STK Push and SMS)
 
 class PhoneFormatTests(TestCase):
     def test_zero_prefix_becomes_254(self):
@@ -53,7 +53,7 @@ class PhoneFormatTests(TestCase):
             self.assertIsNone(format_phone_number(bad), bad)
 
 
-# ---------- Monthly rent balance ----------
+# Monthly rent balance 
 
 @patch("django.utils.timezone.localdate", return_value=TODAY)
 class MonthlyBalanceTests(TestCase):
@@ -100,7 +100,7 @@ class MonthlyBalanceTests(TestCase):
         self.assertEqual(rent_summary(tenant)["balance"], tenant.balance())
 
 
-# ---------- Tenant form: capacity, ID number, phone ----------
+# Tenant form:Capacity,ID number,phone 
 
 class TenantFormTests(TestCase):
     def setUp(self):
@@ -147,7 +147,7 @@ class TenantFormTests(TestCase):
         self.assertIn("phone", form.errors)
 
 
-# ---------- Manual payment form ----------
+# Manual payment form 
 
 class PaymentFormTests(TestCase):
     def setUp(self):
@@ -180,7 +180,7 @@ class PaymentFormTests(TestCase):
         self.assertFalse(form.is_valid())
 
 
-# ---------- M-Pesa callback ----------
+# M-Pesa callback 
 
 @override_settings(MPESA_CALLBACK_TOKEN="test-token")
 class MpesaCallbackTests(TestCase):
@@ -246,7 +246,7 @@ class MpesaCallbackTests(TestCase):
         self.assertEqual(Payment.objects.count(), 0)
 
 
-# ---------- Rent-due SMS reminders ----------
+# Rent-due SMS reminders 
 
 @override_settings(
     RENT_DUE_DAY=1,
@@ -308,7 +308,7 @@ class RentReminderTests(TestCase):
         self.assertIn("no reminders scheduled", output)
 
 
-# ---------- Tenant move-out ----------
+# Tenant move-out 
 
 @patch("django.utils.timezone.localdate", return_value=TODAY)
 class MoveOutTests(TestCase):
@@ -467,7 +467,7 @@ class DeleteTests(TestCase):
 
         
 
-# Reports
+#Reports
 
 @patch("django.utils.timezone.localdate", return_value=TODAY)
 class ReportTests(TestCase):
