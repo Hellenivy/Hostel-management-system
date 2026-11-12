@@ -642,6 +642,9 @@
                 <a href="{% url 'my_account' %}" class="{% if name == 'my_account' %}active{% endif %}">
                     <svg class="icon"><use href="#i-home"/></svg> My account
                 </a>
+                <a href="{% url 'book_rooms' %}" class="{% if name == 'book_rooms' or name == 'book_room' %}active{% endif %}">
+                    <svg class="icon"><use href="#i-door"/></svg> Book a room
+                </a>
                 <a href="{% url 'complaints' %}" class="{% if name == 'complaints' or name == 'add_complaint' %}active{% endif %}">
                     <svg class="icon"><use href="#i-chat"/></svg> Complaints
                 </a>

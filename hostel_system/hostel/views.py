@@ -727,8 +727,8 @@ def my_account(request):
 
     tenant = _own_tenant(request)
     if tenant is None:
-        return render(request, "hostel/my_account.html", {"tenant": None})
-
+ #student who is not a tenant yet:send them to book a room.
+        return redirect("book_rooms")
     return render(request, "hostel/my_account.html", {
         "tenant": tenant,
         "balance": tenant.balance(),

@@ -1,0 +1,22 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Book room {{ room.room_number }}{% endblock %}
+
+{% block content %}
+    <a class="back-link" href="{% url 'book_rooms' %}"><svg class="icon"><use href="#i-arrow-left"/></svg> Back to rooms</a>
+    <div class="page-header">
+        <div>
+            <h1>Book room {{ room.room_number }}</h1>
+            <p class="page-subtitle">KES {{ room.rent_amount|floatformat:"2g" }} per month. {{ free }} of {{ room.capacity }} bed{{ room.capacity|pluralize }} free.</p>
+        </div>
+    </div>
+
+    <form method="post" class="card form-card">
+        {% csrf_token %}
+        {% include "hostel/_form_fields.html" %}
+        <div class="form-actions">
+            <button type="submit" class="btn">Book my bed</button>
+            <a href="{% url 'book_rooms' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

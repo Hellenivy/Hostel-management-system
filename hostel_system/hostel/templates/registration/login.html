@@ -12,6 +12,7 @@
             {% include "hostel/_form_fields.html" %}
             <input type="hidden" name="next" value="{{ next }}">
             <button type="submit" class="btn">Log in</button>
+            <p class="subtle" style="margin-top: 14px; text-align: center;">New student? <a href="{% url 'register' %}">Create an account</a></p>
         </form>
     </div>
 {% endblock %}

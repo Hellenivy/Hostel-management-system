@@ -1,0 +1,17 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Create account{% endblock %}
+
+{% block body %}
+    <div class="auth">
+        <form method="post" class="card auth-card">
+            {% csrf_token %}
+            <div class="brand-mark"><svg class="icon"><use href="#i-bed"/></svg></div>
+            <h1>Create your account</h1>
+            <p class="page-subtitle">Students:sign up to see free rooms and book a bed.</p>
+            {% include "hostel/_form_fields.html" %}
+            <button type="submit" class="btn">Create account</button>
+            <p class="subtle" style="margin-top: 14px; text-align: center;">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+        </form>
+    </div>
+{% endblock %}

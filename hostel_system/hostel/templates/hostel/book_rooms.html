@@ -1,0 +1,56 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Book a room{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Book a room</h1>
+            <p class="page-subtitle">Pick a room that still has a free bed.</p>
+        </div>
+    </div>
+
+    {% if my_booking %}
+    <div class="card" style="padding: 16px 20px; margin-bottom: 16px;">
+        <strong>You have booked room {{ my_booking.room.room_number }}.</strong><br>
+        <span class="subtle">Move-in date: {{ my_booking.move_in_date|date:"d M Y" }}.Waiting for the manager to confirm.</span>
+    </div>
+    {% endif %}
+
+    <div class="card table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Room</th>
+                        <th class="num">Rent per month (KES)</th>
+                        <th>Free beds</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in rooms %}
+                    <tr>
+                        <td class="strong">{{ item.room.room_number }}</td>
+                        <td class="num">{{ item.room.rent_amount|floatformat:"2g" }}</td>
+                        <td>
+                            {% if item.free > 0 %}
+                                <span class="badge badge-green">{{ item.free }} of {{ item.room.capacity }} free</span>
+                            {% else %}
+                                <span class="badge badge-red">Full</span>
+                            {% endif %}
+                        </td>
+                        <td class="num">
+                            {% if item.free > 0 and not my_booking %}
+                                <a class="btn btn-sm" href="{% url 'book_room' item.room.id %}">Book</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="subtle">No rooms yet.Check again soon.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

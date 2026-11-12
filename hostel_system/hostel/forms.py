@@ -1,9 +1,24 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import Payment,Room,Tenant,Complaint
+from .models import Booking,Payment,Room,Tenant,Complaint
 from .mpesa import format_phone_number
 
 
+class BookingForm(forms.ModelForm):
+    class Meta:
+        model = Booking
+        fields = ['full_name', 'phone', 'id_number', 'move_in_date']
+        widgets = {
+            'move_in_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '').strip()
+        if format_phone_number(phone) is None:
+            raise forms.ValidationError(
+                "Enter a valid Safaricom number,like 0712345678."
+            )
+        return phone
 class PaymentForm(forms.ModelForm):
     class Meta:
         model = Payment
