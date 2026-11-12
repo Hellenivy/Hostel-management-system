@@ -129,3 +129,18 @@ class Complaint(models.Model):
 
     def __str__(self):
         return f"{self.tenant.full_name} - {self.status}"
+
+
+
+class Booking(models.Model):
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
+    full_name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=15)
+    id_number = models.CharField(max_length=20)
+    move_in_date = models.DateField()
+    status = models.CharField(max_length=20, default="Reserved")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.full_name} - room {self.room} - {self.status}"

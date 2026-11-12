@@ -1,0 +1,44 @@
+from django.db import transaction
+from django.db.models import F
+
+from .models import Booking, Room, Tenant
+
+
+class RoomFull(Exception):
+    pass
+
+
+class AlreadyBooked(Exception):
+    pass
+
+
+def beds_taken(room):
+    # A bed is taken by a tenant who lives here, or by a student who booked it.
+    tenants = Tenant.objects.filter(room=room, move_out_date__isnull=True).count()
+    reserved = Booking.objects.filter(room=room, status="Reserved").count()
+    return tenants + reserved
+
+
+def book_room(student, room_id, full_name, phone, id_number, move_in_date):
+    with transaction.atomic():
+        # 1. Lock the room first. Writing to the room makes everyone else who
+        #    wants this room wait here until we have finished.
+        Room.objects.filter(id=room_id).update(capacity=F("capacity"))
+        room = Room.objects.get(id=room_id)
+
+        # 2. Now it is safe to count, because nobody else can book at this moment.
+        if Booking.objects.filter(student=student, status="Reserved").exists():
+            raise AlreadyBooked("You already have a booking.")
+
+        if beds_taken(room) >= room.capacity:
+            raise RoomFull(f"Room {room.room_number} is full.")
+
+        # 3. Save the booking.
+        return Booking.objects.create(
+            student=student,
+            room=room,
+            full_name=full_name,
+            phone=phone,
+            id_number=id_number,
+            move_in_date=move_in_date,
+        )
