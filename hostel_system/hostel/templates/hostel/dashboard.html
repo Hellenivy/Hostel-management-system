@@ -73,7 +73,7 @@
                                 <div class="meter-track">
                                     <div class="meter-fill{% if item.status == 'Full' %} full{% endif %}" style="width: {{ item.occupancy_pct }}%"></div>
                                 </div>
-                                <span class="meter-text">{{ item.count }} / {{ item.room.capacity }}</span>
+                                <span class="meter-text">{{ item.count }} / {{ item.room.capacity }}{% if item.reserved %} (+{{ item.reserved }} booked){% endif %}</span>
                             </div>
                         </td>
                         <td>

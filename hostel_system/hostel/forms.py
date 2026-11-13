@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from .models import Booking,Payment,Room,Tenant,Complaint
+from .booking import beds_taken
 from .mpesa import format_phone_number
 
 
@@ -69,20 +70,14 @@ class TenantForm(forms.ModelForm):
                 "A tenant with this ID number already exists."
             )
         return id_number
-
     def clean_room(self):
         room = self.cleaned_data.get('room')
         if room:
-            current = (
-                Tenant.objects.filter(room=room, move_out_date__isnull=True)
-                .exclude(pk=self.instance.pk)
-                .count()
-            )
-            if current >= room.capacity:
+            # Beds booked by students count as taken too.
+            if beds_taken(room, ignore_tenant=self.instance) >= room.capacity:
                 raise forms.ValidationError("This room is already full.")
         return room
-
-
+    
 class ComplaintForm(forms.ModelForm):
     class Meta:
         model = Complaint

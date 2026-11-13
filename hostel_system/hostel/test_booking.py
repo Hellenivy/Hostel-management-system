@@ -1,12 +1,11 @@
 from datetime import date
 from decimal import Decimal
-
 from django.contrib.auth import get_user_model
-from django.test import TestCase
-
+from django.test import TestCase,TransactionTestCase
 from .booking import (
     AlreadyBooked,CannotConfirm,RoomFull,beds_taken,book_room,confirm_booking,
 )
+from .forms import TenantForm
 from .models import Room,Tenant
 
 
@@ -109,8 +108,6 @@ class StudentPageTests(TestCase):
         self.client.force_login(admin)
         self.assertRedirects(self.client.get("/book/"), "/")
 
-    
-
 class ConfirmAndCancelTests(TestCase):
     def setUp(self):
         self.room = Room.objects.create(
@@ -186,3 +183,96 @@ class ConfirmAndCancelTests(TestCase):
         response = self.client.get("/bookings/")
         self.assertContains(response, "Test Student")
         self.assertContains(response, "Confirm")
+
+
+
+class AddTenantAndBookingsTests(TestCase):
+    def setUp(self):
+        self.room = Room.objects.create(
+            room_number="101", rent_amount=Decimal("5000"), capacity=1
+        )
+        self.admin = get_user_model().objects.create_user(
+            "boss", password="pass12345", is_staff=True
+        )
+
+    def tenant_data(self, **changes):
+        data = {
+            "full_name": "Walk In", "phone": "0722000111",
+            "id_number": "55555555", "room": self.room.pk,
+            "move_in_date": "2026-12-01",
+        }
+        data.update(changes)
+        return data
+
+    def test_add_tenant_form_counts_booked_beds(self):
+        book(make_student("anna"), self.room)
+        form = TenantForm(self.tenant_data())
+        self.assertFalse(form.is_valid())
+        self.assertIn("room", form.errors)
+
+    def test_add_tenant_works_when_a_bed_is_free(self):
+        self.assertTrue(TenantForm(self.tenant_data()).is_valid())
+
+    def test_editing_a_tenant_in_a_full_room_still_works(self):
+        tenant = Tenant.objects.create(
+            full_name="Old", phone="0711111111", id_number="11111111",
+            room=self.room, move_in_date=date(2026, 1, 1),
+        )
+        form = TenantForm(
+            self.tenant_data(full_name="Renamed", id_number="11111111"),
+            instance=tenant,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_a_room_with_a_booking_cannot_be_deleted(self):
+        book(make_student("anna"), self.room)
+        self.client.force_login(self.admin)
+        self.client.post(f"/rooms/{self.room.id}/delete/")
+        self.assertTrue(Room.objects.filter(pk=self.room.pk).exists())
+
+    def test_the_dashboard_shows_booked_beds(self):
+        book(make_student("anna"), self.room)
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get("/"), "1 booked")
+
+
+class TwoAdminsAtOnceTests(TransactionTestCase):
+    def test_two_admins_cannot_put_two_tenants_in_a_one_bed_room(self):
+        import threading
+        import time
+
+        from django.db import OperationalError, connection
+
+        from .booking import save_tenant_form
+
+        room = Room.objects.create(
+            room_number="202", rent_amount=Decimal("5000"), capacity=1
+        )
+        start_together = threading.Barrier(2)
+        results = []
+
+        def admin_adds(number):
+            try:
+                start_together.wait(timeout=10)
+                for attempt in range(10):
+                    try:
+                        form = save_tenant_form(TenantForm, {
+                            "full_name": f"Tenant {number}", "phone": "0712345678",
+                            "id_number": f"7700{number}", "room": room.pk,
+                            "move_in_date": "2026-12-01",
+                        })
+                        results.append("refused" if form.errors else "saved")
+                        return
+                    except OperationalError:
+                        time.sleep(0.05 * (attempt + 1))
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=admin_adds, args=(n,)) for n in (1, 2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(sorted(results), ["refused", "saved"])
+        self.assertEqual(Tenant.objects.filter(room=room).count(), 1)

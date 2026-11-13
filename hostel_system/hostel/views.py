@@ -18,7 +18,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
 
 from .decorators import staff_required
-from .models import Room, Tenant, Payment, Complaint, MpesaTransaction
+from .booking import save_tenant_form
+from .models import Booking, Room, Tenant, Payment, Complaint, MpesaTransaction
 from .forms import (
     PaymentForm, RoomForm, TenantForm, ComplaintForm,
     TenantComplaintForm, AdminUserForm, TenantAccountForm,
@@ -79,6 +80,7 @@ def dashboard(request):
             "room": room,
             "tenants": tenants,
             "count": count,
+            "reserved": Booking.objects.filter(room=room, status="Reserved").count(),
             "status": status,
             "occupancy_pct": occupancy_pct,
         })
@@ -135,9 +137,8 @@ def add_room(request):
 @staff_required
 def add_tenant(request):
     if request.method == "POST":
-        form = TenantForm(request.POST)
-        if form.is_valid():
-            form.save()
+        form = save_tenant_form(TenantForm, request.POST)
+        if not form.errors:
             return redirect('dashboard')
     else:
         form = TenantForm()
@@ -148,9 +149,8 @@ def add_tenant(request):
 def edit_tenant(request, tenant_id):
     tenant = get_object_or_404(Tenant, id=tenant_id)
     if request.method == "POST":
-        form = TenantForm(request.POST, instance=tenant)
-        if form.is_valid():
-            form.save()
+        form = save_tenant_form(TenantForm, request.POST, instance=tenant)
+        if not form.errors:
             return redirect('dashboard')
     else:
         form = TenantForm(instance=tenant)
@@ -564,6 +564,12 @@ def delete_room(request, room_id):
             request,
             f"Room {room.room_number} still has tenants (current or past). "
             "Move them to another room or delete them first.",
+        )
+    elif Booking.objects.filter(room=room, status="Reserved").exists():
+        messages.error(
+            request,
+            f"Room {room.room_number} has a student booking waiting. "
+            "Cancel the booking first.",
         )
     else:
         number = room.room_number
