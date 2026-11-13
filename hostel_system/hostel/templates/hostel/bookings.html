@@ -1,0 +1,65 @@
+{% extends "hostel/base.html" %}
+
+{% block title %}Bookings{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Bookings</h1>
+            <p class="page-subtitle">Students who booked a bed.Confirm a booking to make the student a tenant.</p>
+        </div>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Phone</th>
+                        <th>ID number</th>
+                        <th>Room</th>
+                        <th>Move-in</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in bookings %}
+                    <tr>
+                        <td class="strong">{{ b.full_name }}</td>
+                        <td>{{ b.phone }}</td>
+                        <td>{{ b.id_number }}</td>
+                        <td>{{ b.room.room_number }}</td>
+                        <td class="muted">{{ b.move_in_date|date:"d M Y" }}</td>
+                        <td>
+                            {% if b.status == "Reserved" %}
+                                <span class="badge badge-amber">Reserved</span>
+                            {% elif b.status == "Confirmed" %}
+                                <span class="badge badge-green">Confirmed</span>
+                            {% else %}
+                                <span class="badge badge-red">{{ b.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="num" style="white-space: nowrap;">
+                            {% if b.status == "Reserved" %}
+                                <form method="post" action="{% url 'confirm_booking' b.id %}" style="display:inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm">Confirm</button>
+                                </form>
+                                <form method="post" action="{% url 'cancel_booking' b.id %}" style="display:inline"
+                                      onsubmit="return confirm('Cancel this booking?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-secondary">Cancel</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="subtle">No bookings yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

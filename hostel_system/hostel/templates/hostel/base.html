@@ -613,8 +613,11 @@
                 <span class="brand-mark"><svg class="icon"><use href="#i-bed"/></svg></span>
                 <span>Smart Hostel</span>
             </a>
-                <a href="{% url 'reports' %}" class="{% if name == 'reports' or name == 'report_detail' %}active{% endif %}">
-                    <svg class="icon"><use href="#i-chart"/></svg> Reports
+            <a href="{% url 'bookings' %}" class="{% if name == 'bookings' %}active{% endif %}">
+            <svg class="icon"><use href="#i-key"/></svg> Bookings
+            </a>
+            <a href="{% url 'reports' %}" class="{% if name == 'reports' or name == 'report_detail' %}active{% endif %}">
+                <svg class="icon"><use href="#i-chart"/></svg> Reports
                 </a>
 
             {% if request.user.is_staff %}

@@ -11,9 +11,16 @@
     </div>
 
     {% if my_booking %}
-    <div class="card" style="padding: 16px 20px; margin-bottom: 16px;">
-        <strong>You have booked room {{ my_booking.room.room_number }}.</strong><br>
-        <span class="subtle">Move-in date: {{ my_booking.move_in_date|date:"d M Y" }}.Waiting for the manager to confirm.</span>
+    <div class="card" style="padding: 16px 20px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+        <div>
+            <strong>You have booked room {{ my_booking.room.room_number }}.</strong><br>
+            <span class="subtle">Move-in date: {{ my_booking.move_in_date|date:"d M Y" }}. Waiting for the manager to confirm.</span>
+        </div>
+        <form method="post" action="{% url 'cancel_booking' my_booking.id %}" style="margin: 0;"
+              onsubmit="return confirm('Cancel your booking for room {{ my_booking.room.room_number }}?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-secondary">Cancel booking</button>
+        </form>
     </div>
     {% endif %}
 
@@ -47,7 +54,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="subtle">No rooms yet.Check again soon.</td></tr>
+                    <tr><td colspan="4" class="subtle">No rooms yet. Check again soon.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

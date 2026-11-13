@@ -43,3 +43,43 @@ def book_room(student, room_id, full_name, phone, id_number, move_in_date):
             move_in_date=move_in_date,
         )
 
+
+
+class CannotConfirm(Exception):
+    pass
+
+
+def confirm_booking(booking_id):
+    with transaction.atomic():
+        # Lock the booking first,so two clicks can never confirm it twice.
+        Booking.objects.filter(id=booking_id).update(status=F("status"))
+        booking = Booking.objects.get(id=booking_id)
+
+        if booking.status != "Reserved":
+            raise CannotConfirm(f"This booking is already {booking.status.lower()}.")
+
+        if Tenant.objects.filter(id_number__iexact=booking.id_number).exists():
+            raise CannotConfirm("A tenant with this ID number already exists.")
+
+        if Tenant.objects.filter(user=booking.student).exists():
+            raise CannotConfirm("This student is already a tenant.")
+
+        tenant = Tenant.objects.create(
+            full_name=booking.full_name,
+            phone=booking.phone,
+            id_number=booking.id_number,
+            room=booking.room,
+            move_in_date=booking.move_in_date,
+            user=booking.student,
+        )
+        booking.status = "Confirmed"
+        booking.save()
+        return tenant
+
+
+def cancel_booking(booking_id, student=None):
+    # Pass a student to make sure they can only cancel their own booking.
+    bookings = Booking.objects.filter(id=booking_id, status="Reserved")
+    if student is not None:
+        bookings = bookings.filter(student=student)
+    return bookings.update(status="Cancelled") > 0

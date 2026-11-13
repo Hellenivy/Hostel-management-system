@@ -4,8 +4,10 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from .booking import AlreadyBooked, RoomFull, beds_taken, book_room
-from .models import Room
+from .booking import (
+    AlreadyBooked,CannotConfirm,RoomFull,beds_taken,book_room,confirm_booking,
+)
+from .models import Room,Tenant
 
 
 def make_student(name):
@@ -106,3 +108,81 @@ class StudentPageTests(TestCase):
         admin = get_user_model().objects.create_user("boss", password="x", is_staff=True)
         self.client.force_login(admin)
         self.assertRedirects(self.client.get("/book/"), "/")
+
+    
+
+class ConfirmAndCancelTests(TestCase):
+    def setUp(self):
+        self.room = Room.objects.create(
+            room_number="101", rent_amount=Decimal("5000"), capacity=2
+        )
+        self.admin = get_user_model().objects.create_user(
+            "boss", password="pass12345", is_staff=True
+        )
+
+    def test_confirming_makes_the_student_a_tenant(self):
+        student = make_student("anna")
+        booking = book(student, self.room)
+        self.client.force_login(self.admin)
+        self.client.post(f"/bookings/{booking.id}/confirm/")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "Confirmed")
+        tenant = Tenant.objects.get(user=student)
+        self.assertEqual(tenant.room, self.room)
+        self.assertEqual(tenant.full_name, "Test Student")
+        # The bed is now used by the tenant, not by the booking.
+        self.assertEqual(beds_taken(self.room), 1)
+
+    def test_confirming_twice_makes_only_one_tenant(self):
+        booking = book(make_student("anna"), self.room)
+        self.client.force_login(self.admin)
+        self.client.post(f"/bookings/{booking.id}/confirm/")
+        self.client.post(f"/bookings/{booking.id}/confirm/")
+        self.assertEqual(Tenant.objects.count(), 1)
+
+    def test_an_id_number_that_already_exists_is_refused(self):
+        booking = book(make_student("anna"), self.room)
+        Tenant.objects.create(
+            full_name="Old", phone="0711111111", id_number=booking.id_number,
+            room=self.room, move_in_date=date(2026, 1, 1),
+        )
+        with self.assertRaises(CannotConfirm):
+            confirm_booking(booking.id)
+
+    def test_cancelling_frees_the_bed(self):
+        booking = book(make_student("anna"), self.room)
+        self.client.force_login(self.admin)
+        self.client.post(f"/bookings/{booking.id}/cancel/")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "Cancelled")
+        self.assertEqual(beds_taken(self.room), 0)
+
+    def test_a_student_can_cancel_their_own_booking(self):
+        anna = make_student("anna")
+        booking = book(anna, self.room)
+        self.client.force_login(anna)
+        self.client.post(f"/bookings/{booking.id}/cancel/")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "Cancelled")
+
+    def test_a_student_cannot_cancel_someone_elses_booking(self):
+        booking = book(make_student("anna"), self.room)
+        self.client.force_login(make_student("brian"))
+        self.client.post(f"/bookings/{booking.id}/cancel/")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "Reserved")
+
+    def test_a_student_cannot_confirm_a_booking(self):
+        booking = book(make_student("anna"), self.room)
+        self.client.force_login(make_student("brian"))
+        self.client.post(f"/bookings/{booking.id}/confirm/")
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "Reserved")
+        self.assertEqual(Tenant.objects.count(), 0)
+
+    def test_the_bookings_page_lists_bookings(self):
+        book(make_student("anna"), self.room)
+        self.client.force_login(self.admin)
+        response = self.client.get("/bookings/")
+        self.assertContains(response, "Test Student")
+        self.assertContains(response, "Confirm")
